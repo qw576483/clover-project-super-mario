@@ -3,9 +3,12 @@ $ErrorActionPreference = 'Stop'
 # Round 3. Round 1's 4 FAIL were harness bugs; round 2's single FAIL (V10) was real: the template and the
 # shipped project gate had drifted (check label + a hidden dependency on another check's variable). Both fixed.
 $repo = 'clover-tools\ai-skill'
-$inst = 'C:\Users\xuanyuan\.codebuddy\skills\ai-skill'
+# Host install copy: derived from the user profile, never a hard-coded user name.
+$inst = Join-Path $env:USERPROFILE '.codebuddy\skills\ai-skill'
 $proj = 'clover-project-super-mario'
 $tmp  = Join-Path $proj '.ai-tmp\test'
+# This script lives in <repo>\tools\probes\, so the repo root is two levels up.
+$gitRoot = Join-Path $PSScriptRoot '..\..'
 $fail = 0
 function V($ok, $name, $detail) {
   if ($ok) { Write-Output ("PASS  {0,-30} {1}" -f $name, $detail) }
@@ -34,8 +37,8 @@ $cb = @(Get-ChildItem $inst -Recurse -File).Count
 V ($ca -eq $cb) 'V1-copy file-count' ("repo=$ca installed=$cb")
 
 Write-Output '--- V2  committed content is what was written ---------------'
-$s1 = (git -C 'C:\Work\Server\full-dev' --no-pager show --stat --format='%h|%s' 2f981f67) -join ' ; '
-$s2 = (git -C 'C:\Work\Server\full-dev' --no-pager show --stat --format='%h|%s' 2416f132) -join ' ; '
+$s1 = (git -C $gitRoot --no-pager show --stat --format='%h|%s' 2f981f67) -join ' ; '
+$s2 = (git -C $gitRoot --no-pager show --stat --format='%h|%s' 2416f132) -join ' ; '
 Info 'V2-commit-skill' $s1
 Info 'V2-commit-gate'  $s2
 V ($s1 -match '2 files changed' -and $s1 -match 'SKILL\.md' -and $s1 -match 'verify-template\.md') 'V2-skill-commit-scope' 'exactly the 2 skill files'

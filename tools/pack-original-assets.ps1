@@ -10,7 +10,7 @@
 #
 # Usage:
 #   powershell -NoProfile -File tools/pack-original-assets.ps1
-#   powershell -NoProfile -File tools/pack-original-assets.ps1 -Out D:\share\refs.zip
+#   powershell -NoProfile -File tools/pack-original-assets.ps1 -Out "$env:TEMP\refs.zip"
 #
 # ASCII-only on purpose (PowerShell 5.1 parses a BOM-less .ps1 as ANSI), so the Chinese folder name
 # is built from code points instead of being written as a literal.

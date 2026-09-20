@@ -14,6 +14,10 @@ client/Assets/Settings/Scenes/
 # 探针会把图落在 client/Assets/Screenshots/；这一条保证它不会被误提交。
 client/Assets/Screenshots/
 
+# 冒烟 / 自审的截图输出目录：Tests/PlayMode/SmokeTests.cs 与 Editor/SmokeScreenshots.cs 都写 "_smb_work/shots"，
+# 而 Unity 的 cwd = client/ ⇒ 实际落在 client/_smb_work/。同样是一次性产物，不进仓库。
+client/_smb_work/
+
 # ── Unity 派生 / 缓存 / 机器相关产物（**不要提交**）─────────────────────────────
 # 实测本仓库 client/ 共 1823 MB，其中 Library 独占 1769 MB / 26821 个文件 ——
 # 它是 Unity 的导入缓存，换台机器会自动重建；提交它既撑爆仓库又毫无价值。

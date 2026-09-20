@@ -2,7 +2,8 @@ $ErrorActionPreference = 'Stop'
 # One-off harness (round 4): every check LABEL in the template skeleton must be ASCII, and every label
 # the prose cites must exist in the code. Deleted after use.
 $repo = 'clover-tools\ai-skill'
-$inst = 'C:\Users\xuanyuan\.codebuddy\skills\ai-skill'
+# Host install copy: derived from the user profile, never a hard-coded user name.
+$inst = Join-Path $env:USERPROFILE '.codebuddy\skills\ai-skill'
 $proj = 'clover-project-super-mario'
 $fail = 0
 function V($ok, $name, $detail) {
