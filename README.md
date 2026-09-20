@@ -18,7 +18,8 @@
 ## 怎么玩
 
 1. Unity **6000.x** 打开 `client/`；
-2. 进 Play 即可（标题屏 → 按空格/回车开始）。
+2. 进 Play 即可（标题屏 → 按空格/回车开始）；
+3. 引擎包 `com.clover.unity-engine` 由 UPM 自动从 [clover-client-unity-engine](https://github.com/qw576483/clover-client-unity-engine) 拉取（首次打开联网克隆，之后走本地缓存）—— **需本机已装 Git 且在 `PATH` 里**。
 
 ## 工程结构
 
