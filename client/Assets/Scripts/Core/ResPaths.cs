@@ -364,6 +364,19 @@ namespace SuperMario.Core
         public const string PowerUpAppear = "item";
         public const string PowerUp = "powerup";
         public const string Pipe = "pipepowerdown";
+
+        /// <summary>
+        /// 掉能力（受伤缩小）音效。
+        /// <para>
+        /// **与"进管"共用同一个采样**，不是另挑一个音 —— 出处是素材包自己的**文件名**
+        /// <c>Resources/Sound/SFX/pipepowerdown.wav</c>：原版素材把它命名成 "pipe" + "powerdown"
+        /// 一个名字，即"进管 / 掉能力"两用（原版马里奥受伤降级与钻进水管响的是同一个音）。
+        /// 本工程此前只把它接给了进管（<see cref="Pipe"/>），受伤那条路一声不响 ——
+        /// 用户 2026-09-20 点名「受伤没有音效」。
+        /// </para>
+        /// </summary>
+        public const string PowerDown = Pipe;
+
         public const string Fire = "fire";
         public const string Fireball = "fireball";
         public const string Stomp = "stompswim";

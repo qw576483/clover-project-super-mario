@@ -252,7 +252,13 @@ namespace SuperMario.Module.Player
 
             _power = _power == PowerState.Fire ? PowerState.Big : PowerState.Small;
             _actor.PlayTransform(PlayerMotion.Shrinking, _power);
-            Game.Logger.Info("Player", $"受伤降级 → {_power}");
+
+            // ★ 受伤（掉能力）音效：用户 2026-09-20 点名「受伤没有音效」。
+            //   走 `Sfx.PowerDown`（= 与进管共用的那个采样，出处见 `Core/ResPaths.cs`）。
+            //   ⚠️ 只在这一支响 —— 小马里奥挨打走的是上面的 `Kill()`，那一声是 `Sfx.Death`（在 AppFlow 放），
+            //   两处都放就会"又掉能力又死"两声叠在一起。
+            _audio?.PlaySfx(Sfx.PowerDown);
+            Game.Logger.Info("Player", $"受伤降级 → {_power}（音效 {Sfx.PowerDown}）");
         }
 
         public void Kill(bool playAnimation = true)

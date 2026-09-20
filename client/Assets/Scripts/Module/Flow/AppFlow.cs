@@ -278,10 +278,13 @@ namespace SuperMario.Module.Flow
         private bool _tallyStarted;
 
         /// <summary>
-        /// 通关音乐放多久再进下一关 / 结算屏（秒）。
+        /// 通关结算收尾停留（秒）：时间兑完分之后停多久才进下一关 / 结算屏。
         /// <para>⛔ 这个 2.5 是**原来那句 `_resultTimer = 2.5f` 的值**，不是音乐长度 ——
         /// `IAudio` 目前没暴露 clip 时长；等暴露了就换成 `LevelComplete.wav` 的真实长度
         /// （原版 `Castle.cs:26 LoadNewLevel(sceneName, levelCompleteMusic.length)` 用的正是音乐长度）。</para>
+        /// <para>⚠️ 2026-09-20 起它**不再等于"音乐还要放多久"**：通关音乐已改到「时间倒计时开始」那一刻播
+        /// （见 <see cref="TickStage"/> 的结算段），而倒计时本身要跑 <c>TimeLeft × TallyInterval</c> 秒，
+        /// 所以音乐早就放完了 —— 这里纯粹是收尾停留。</para>
         /// </summary>
         private const float ResultMusicWait = 2.5f;
 
@@ -596,9 +599,16 @@ namespace SuperMario.Module.Flow
                 {
                     _tallyStarted = true;
                     Game.Sound.StopBGM(0.2f);
+                    // ★ ② 通关音乐：**全项目只在这一处放，且只放这一次** —— 时机 =「时间倒计时开始」。
+                    //   用户 2026-09-20 点名：「通关音乐会播两次，时间倒计时开始时候要，结束那次不要」。
+                    //   原来另有两处会响：① 走进城堡那一刻（`PlayerActor.TickCastleWalk`）、
+                    //   ② 下面倒计时兑完那一刻。两处都已删除，只剩这一处（判据：全项目 `Sfx.LevelComplete`
+                    //   只有这一个播放点）。
+                    active.Audio.PlaySfx(Sfx.LevelComplete);
                     Game.Logger.Info("Flow",
                         $"通关结算开始：剩余时间 {active.Score.TimeLeft} 个单位 × {GameConst.ScorePerTime} 分" +
-                        $"（结算前分 {active.Score.Points}、币 {active.Score.Coins}）；停 BGM，逐单位换分");
+                        $"（结算前分 {active.Score.Points}、币 {active.Score.Coins}）；" +
+                        $"停 BGM，播放通关音乐 {Sfx.LevelComplete}（只此一次），逐单位换分");
                 }
 
                 // ⚠️ 兑换节奏**按时间**、不按帧：一帧兑 1 个单位时"结算多久"会随帧率变 ——
@@ -614,10 +624,12 @@ namespace SuperMario.Module.Flow
                 }
                 if (more) return;      // 还在跳：这一帧别往下走（E-20 的教训：分支里该 return 就 return）
 
+                // ⛔ 这里**不放**通关音乐 —— 它已经在上面「倒计时开始」那一刻放过了（用户 2026-09-20 点名）。
+                //   这一段只负责"停留一会再进下一关 / 结算屏"。
                 Game.Logger.Info("Flow",
-                    $"通关结算完成：分 {active.Score.Points}、时间已归零；播放通关音乐 {Sfx.LevelComplete}");
-                active.Audio.PlaySfx(Sfx.LevelComplete);   // ★ ② 通关音乐（常量与素材都有，一直没人播）
-                _resultTimer = ResultMusicWait;          // ③ 等音乐放一会再进下一关 / 结算屏
+                    $"通关结算完成：分 {active.Score.Points}、时间已归零；" +
+                    $"{ResultMusicWait} 秒后进下一关 / 结算屏（通关音乐已在倒计时开始那一刻播放，此处不重复）");
+                _resultTimer = ResultMusicWait;          // ③ 停留一会再进下一关 / 结算屏
             }
             if (_resultTimer >= 0f)
             {

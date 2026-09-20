@@ -4,16 +4,18 @@
 
 **复刻范围**：World **1-1 / 1-2** 原版级还原，含 1-2 → 1-1 的秘密金币房通道；照原版做，不加不减。
 
-## 原版对照画面
+## 实机画面
 
-![World 1-1 全图](策划/基线图/nes-original-1-1-full-map.png)
-![World 1-2 全图](策划/基线图/nes-original-1-2-full-map.png)
+![标题屏（含 ©1985 NINTENDO 版权行 + by clover-engine 署名）](策划/实机图/game-title.png)
+![World 1-1 首屏](策划/实机图/game-world1-1.png)
 
-![标题屏](策划/基线图/nes-original-title-screen.png)
-![1-1 首屏](策划/基线图/nes-original-1-1-first-screen.png)
+![World 1-2（地下段）](策划/实机图/game-world1-2.png)
+![World 1-2（地表段：旗杆与城堡）](策划/实机图/game-world1-2-surface.png)
 
-> 以上为**原版 NES 画面**，作为复刻的逐格对照基准（`策划/基线图/`）。
-> 本工程的实机取证截图是**一次性产物**，验收后已按约定清理，不随仓库保存。
+> 以上是本工程的**实机帧**（Unity Play 抓帧；入口 = `tools/probes/probe.cs` 的 `Probe.Readme`，
+> 发布脚本 = `tools/probes/readme-shots.ps1`，成品图随仓库保存在 `策划/实机图/`）。
+> 标题屏那张保留了原版的 `©1985 NINTENDO` 版权行与引擎署名。
+> 原版 NES 画面仍作为逐格对照基准留在 `策划/基线图/`（对照结论见 `策划/对照表.md`）。
 
 ## 怎么玩
 

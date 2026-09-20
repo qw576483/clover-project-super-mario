@@ -5123,4 +5123,262 @@ public static class Probe
         L($"PROBE 警告：{name} 在 {timeout} 秒内等不到「全部缩回」⇒ 未出图");
         return false;
     }
+
+    // ═══════════════ 场景：README 实机画面重拍（用户 2026-09-20 点名）═══════════════
+    //
+    // 用户原话：「用实机画面，覆盖 readme.md 里面的画面，你去重新截（版权那个要带上）」。
+    // 本场景拍的全是**本工程自己的实机帧**；拍完由 `tools/probes/readme-shots.ps1` 复制进
+    // `<项目根>/策划/实机图/`，`README.md` 引用的是那份**进仓库**的副本
+    // —— ⛔ README 不许直接引用 `.ai-tmp/screenshots/`（那是按约定用后即删的一次性产物）。
+    //
+    // 四张（＝ README「实机画面」那一节）：
+    //   ① `readme-title`             标题屏 —— **必须带版权行 `©1985 NINTENDO`** 与引擎署名 `by clover-engine`
+    //   ② `readme-world1-1`          World 1-1 首屏
+    //   ③ `readme-world1-2`          World 1-2 地下段
+    //   ④ `readme-world1-2-surface`  World 1-2 地表段（旗杆 + 城堡）
+    //
+    // 摆位出处（一个数都不自己定，全部来自关卡数据 / 既有场景）：
+    //   · 1-1 首屏 `(6.5,-3)` = `reshoot` 场景同一处（1-1 地面两行 y=-5/-4 ⇒ 站姿脚底 -3）。
+    //   · 1-2 地下段 `(10,0)` = `World1-2.txt` 里 x=8..14 那两行地面（y=-2/-1 ⇒ 脚底 0），
+    //     且 x=10 这一列没有别的瓦片（同列 x=14 在 y=0 有一块，所以不选 14）。
+    //   · 1-2 地表段 `(15,0)` = `World1-2-Surface.txt` 的地面（y=-2/-1 ⇒ 脚底 0）；15 在台阶（x=2..10）
+    //     右边、旗杆（`# flagpole 19 0` ⇒ x=19.5）左边 —— 走过头就会触发通关流程、这一张就拍不到了。
+    public static void Readme() => Start("readme", ReadmeBody);
+
+    private static async Task ReadmeBody()
+    {
+        // ── ① 标题屏（含版权行 + 署名）──
+        await MenuReady();
+        State("README ① 标题屏");
+        await ShotGated("readme-title", "README ① 标题屏（版权行 ©1985 NINTENDO + by clover-engine）", MenuGate);
+
+        // ── ② World 1-1 首屏 ──
+        await EnterGame();
+        if (!IsStage) { L("PROBE 没进到 1-1，放弃拍 README 画面"); return; }
+        // ⚠️ 不能一进关就摆到 (6.5,-3)：1-1 最左那只栗宝宝在 `E 9.5 -2.5`，**向左**走（2.5 格/秒），
+        //    进关约 1.2 秒后它正好经过 x=6.5 —— 实测 2026-09-20 16:39:09（第一次跑这个场景）：
+        //    `马里奥传送 → (6.5,-3.0)` 之后 0.34 秒就 `马里奥死亡`（小马里奥被侧面撞 = 静默 Kill），
+        //    于是出图闸门以 `存活=False` 拒图。修法 = 等它走过去 + 顺手清掉附近的（`reshoot` 场景
+        //    之所以没踩到这坑，是因为它在摆位前已经先跑了几秒钟的转储）。
+        await Wait(2.8f);
+        await ClearGoombasNear(6.5f, 6f);
+        Teleport(6.5f, -3f);
+        await Wait(1.0f);
+        State("README ② 1-1 首屏");
+        await ShotGated("readme-world1-1", "README ② 1-1 首屏",
+            () => StageAlive() && StageContext.LevelPath == "Levels/World1-1" && NearX(6.5f));
+
+        // ── ③ World 1-2 地下段 ──
+        CallFlow("NextLevel");
+        await Wait(1.2f);
+        await WaitStage(25f);
+        await Wait(0.8f);
+        await Settle12(10f, 0f, "README ③ 1-2 地下段");
+        State("README ③ 1-2 地下段");
+        await ShotGated("readme-world1-2", "README ③ 1-2 地下段", () => SideGate(10f, 0f));
+
+        // ── ④ World 1-2 地表段（旗杆 + 城堡）──
+        // 走侧向管口换段（管口面由关卡数据给，⛔ 不写死），换完再摆到旗杆左边。
+        var lv12 = StageContext.Level;
+        if (lv12 == null) { L("PROBE 1-2 关卡没了 ⇒ 拍不到地表段"); return; }
+        await Settle12(lv12.SideExitFaceX - 1f, lv12.SideExitY, "README ④ 进侧向管前");
+        _stub.Hold(GameKey.RightArrow, true);
+        for (var i = 0; i < 900 && StageContext.LevelPath != "Levels/World1-2-Surface"; i++) await Wait(0.01f);
+        _stub.Hold(GameKey.RightArrow, false);
+        for (var i = 0; i < 60 && FsmNow != "Stage"; i++) await Wait(0.25f);
+        await Wait(1.0f);
+        Teleport(15f, 0f);
+        await Wait(0.8f);
+        State("README ④ 1-2 地表段（旗杆 + 城堡）");
+        await ShotGated("readme-world1-2-surface", "README ④ 1-2 地表段（旗杆 + 城堡）",
+            () => StageAlive() && StageContext.LevelPath == "Levels/World1-2-Surface" && NearX(15f, 1.5f));
+
+        await TailToMenu("readme");
+    }
+
+    // ═══════════════ 场景：两个用户点名缺陷的实机判据（2026-09-20）═══════════════
+    //
+    // ① **受伤没有音效**（用户原话）。判据 = **真实在播的 AudioSource**（`BgmState()` 读的是引擎音源池，
+    //    不是业务层"我调了播放"）里出现 `pipepowerdown playing=True`，且它落在"受伤降级"那一刻的窗口内。
+    // ② **通关音乐播两次**（用户原话：「时间倒计时开始时候要，结束那次不要」）。三条子判据**同时**成立才算 PASS：
+    //    (a) **启动沿 = 1**：**每 100 毫秒**采一次音源池（降频理由见 `FixBody`），数 `LevelComplete`
+    //        的**上升沿**（没在播 → 在播）。修前那版在"走进城堡"与"倒计时结束"各响一次 ⇒ 这里会数到 2。
+    //    (b) **并发数 ≤ 1**：同一时刻 `LevelComplete playing=True` 的音源**最多 1 个**（重播必然多一个音源同时在放）。
+    //    (c) **日志增量 = 1**：`播放通关音乐 LevelComplete（只此一次）` 这个串**只**出现在"倒计时开始"那一句。
+    //    ⚠️ 三条都要，缺一不可：只看日志 ⇒ 若有人改了日志却照样播（或绕开日志）就测不出来；
+    //       只看音源 ⇒ 「响两次」与「响一次但很长」分不清（`LevelComplete.wav` 实测 6.4 秒，
+    //       与倒计时 ~7.8 秒同量级，单看某一时刻的 isPlaying 分不出重播）。
+    //    ⚠️ 判据① 跑完**先把这一局重开**（`TailToMenu` + `EnterGame`）再走旗杆链路 —— 理由是实测出来的，
+    //       写在 `FixBody` 里（"打完架直接接着走"不稳：16:45 那次人一步没走）。
+    public static void Fix() => Start("fix", FixBody);
+
+    /// <summary>
+    /// 数当前这一天的游戏日志里某个串出现了几次（**运行期**判据，见 <see cref="FixBody"/>）。
+    /// <para>为什么需要它：有些判据是"这件事只许发生一次"，而"只发生一次"只有在运行期数出来才算证据 ——
+    /// 静态 grep 只能证明"只有一个播放点"，证明不了"运行期真的只走了一次"。</para>
+    /// </summary>
+    private static int CountInLog(string needle)
+    {
+        try
+        {
+            // cwd = client/（引擎把探针跑在工程目录里）；日志按天切名，跨零点后旧文件不再追加（实测 2026-09-19）。
+            var p = "Logs/" + DateTime.Now.ToString("yyyy-MM-dd") + ".log";
+            if (!File.Exists(p)) { L($"PROBE 读日志失败（{p} 不存在）"); return -1; }
+            string text;
+            using (var fs = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var sr = new StreamReader(fs, System.Text.Encoding.UTF8))
+                text = sr.ReadToEnd();
+            return CountOf(text, needle);
+        }
+        catch (Exception e)
+        {
+            L($"PROBE 读日志异常：{e.GetType().Name}: {e.Message}");
+            return -1;
+        }
+    }
+
+    private static int CountOf(string haystack, string needle)
+    {
+        if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(needle)) return 0;
+        var n = 0; var i = 0;
+        while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
+    private static async Task FixBody()
+    {
+        await EnterGame();
+        if (!IsStage) { L("PROBE 没进到 1-1，放弃"); return; }
+
+        // ── ① 受伤音效 ──
+        StageContext.Player.PowerUp(PowerState.Big);
+        await Wait(1.0f);
+        L($"PROBE fix 判据①前提：变大后 power={StageContext.Player?.Power}（受伤降级只在 Big/Fire 上才会响）");
+
+        MonoBehaviour pick = null;
+        SuperMario.Module.Entities.IEnemy pickE = null;
+        foreach (var mb in AllEnemies())
+        {
+            if (mb == null) continue;
+            if (!mb.gameObject.name.StartsWith("Goomba", StringComparison.Ordinal)) continue;
+            if (!(mb is SuperMario.Module.Entities.IEnemy e) || e.Dead) continue;
+            pick = mb; pickE = e; break;
+        }
+        if (pick == null) L("PROBE fix 警告：场上没有活着的栗宝宝 ⇒ 判据①缺受伤源，这一项不成立");
+        else
+        {
+            var gb = pickE.Bounds;
+            L($"PROBE fix 判据①目标栗宝宝 x={gb.center.x:F2} " +
+              $"盒=[{gb.xMin:F2},{gb.xMax:F2}]x[{gb.yMin:F2},{gb.yMax:F2}]");
+            // 摆到它**同一个脚底高度、同一列**上：判定里"从上方踩下来"的两条前提都不成立
+            //   （脚底不高于敌人中心、上一帧脚底也不在它顶面之上）⇒ 走 `TakeDamage()` 那条侧面接触路径，
+            //   与玩家"从侧面撞上去"是同一条链（⛔ 不是直接调 TakeDamage 造假）。
+            Teleport(gb.center.x, gb.yMin);
+            var seen = false; var hitLine = ""; var samples = 0; var damaged = false;
+            for (var i = 0; i < 150; i++)
+            {
+                await Wait(0.02f);
+                if (StageContext.Player == null) { L("PROBE fix 判据①马里奥没了（被撞死？）"); break; }
+                samples++;
+                var st = BgmState();
+                if (st.Contains("pipepowerdown playing=True")) { seen = true; hitLine = st; }
+                if (StageContext.Player.Power == PowerState.Small) damaged = true;
+                if (i % 25 == 0) L($"PROBE fix 判据①采样 i={i} power={StageContext.Player.Power} " +
+                                   $"alive={StageContext.Player.Alive} 音源={st}");
+                if (seen) break;
+            }
+            L($"PROBE fix 判据①受伤音效：采样 {samples} 次（20 毫秒/次）；降级到 Small={damaged}；" +
+              $"采到 `pipepowerdown playing=True` = {seen}；命中时的音源读数={hitLine} ⇒ {(seen ? "PASS" : "FAIL")}");
+        }
+
+        // ── ② 通关音乐：**先把这一局重开**、再走一条真实的旗杆链路（与 `flag` 场景同形）──
+        //
+        // ⚠️ 判据用的串必须**只在流程那一行里出现**：第一次跑（2026-09-20 16:39）用的是
+        //    `播放通关音乐`，而探针自己下面那两行日志把判据串**原样抄了一遍**
+        //    （`...日志「播放通关音乐」链路前 ...`）⇒ 计数被自己污染，增量读到 2、判 FAIL（假红）。
+        //    现在这个串 = 流程那一行的完整片段，探针自己的日志里不出现它。
+        const string musicMark = "播放通关音乐 LevelComplete（只此一次）";
+
+        // ⚠️ 为什么判据① 一跑完**先重开一局**、而不是接着走旗杆：
+        //    实测（2026-09-20 16:45）判据① 一结束就 `Teleport(181.5,-3)` + 按住右 —— 人**一步没走**，
+        //    `到达旗杆` 到时间耗尽都没出现（白等 160 秒）⇒ 启动沿 0 次 ⇒ 假红；而 16:39 那次同一段
+        //    代码却走通了 ⇒ "打完架直接接着走旗杆"不稳。重开一局后这一段就与**已验收、稳定复现**的
+        //    `flag` 场景完全同形（`FlagBody` 的五步：Teleport → Wait(0.8) → ClearGoombasNear → 按右 1.2s → 松开）。
+        await TailToMenu("fix-①→②");
+        await EnterGame();
+        if (!IsStage) { L("PROBE fix 重开一局后没进到关卡 ⇒ 判据②不成立（下面这些读数不作数）"); return; }
+        var lv2 = StageContext.Level;
+        if (lv2 == null) { L("PROBE fix 判据②守卫：StageContext.Level = null ⇒ 没有关卡数据，判据②不成立"); return; }
+        // 关卡守卫：判据不成立时一眼看出**是哪一条挡的**（全部取自 `StageContext` / `LevelData`，不另写值）。
+        L($"PROBE fix 判据②守卫：关卡={StageContext.LevelPath} 子区={StageContext.SubArea} " +
+          $"有旗杆={lv2.HasFlagpole} 旗杆X={lv2.FlagpoleX} 触发X={lv2.FlagpoleTouchX} 城堡门X={lv2.CastleDoorX}");
+
+        var nStart = CountInLog("通关结算开始");
+        var nDone = CountInLog("通关结算完成");
+        var nMusic = CountInLog(musicMark);
+        L($"PROBE fix 判据②链路前计数：结算开始={nStart} 结算完成={nDone} 通关音乐行={nMusic}");
+
+        Teleport(181.5f, -3f);
+        await Wait(0.8f);
+        await ClearGoombasNear(182f, 6f);
+        _stub.Hold(GameKey.RightArrow, true);
+        await Wait(1.2f);
+        _stub.Hold(GameKey.RightArrow, false);
+
+        var lcOn = false; var lcStarts = 0; var lcMax = 0;
+        var audioAtStart = "";
+        var lastSt = "（还没采到音源）";
+        var endAudio = "（没等到「通关结算完成」就换段了）";
+        var endChecked = false;
+        // ★ 采样降频（性能）：`BgmState()` 要 `FindObjectsByType` 扫全部音源，**每轮都调**的话
+        //   2000 轮实测跑了 **167 秒**（2026-09-20 16:45）。改成**每 5 轮采一次** = 100 毫秒粒度 ——
+        //   `LevelComplete.wav` 有 6 秒多，重播必然在下一个采样点被看见（不会漏沿）；
+        //   日志计数**每 50 轮**（≈1 秒）查一次（读整篇日志文本比扫音源便宜，但也没必要每轮做）。
+        for (var i = 0; i < 1600; i++)      // 20 毫秒/轮 × 1600 = 32 秒上限
+        {
+            await Wait(0.02f);
+            if (i % 5 == 0)
+            {
+                var st = BgmState();
+                lastSt = st;
+                var c = CountOf(st, "LevelComplete playing=True");
+                if (c > 0)
+                {
+                    if (!lcOn) { lcStarts++; audioAtStart = st; }
+                    lcOn = true;
+                }
+                else lcOn = false;
+                if (c > lcMax) lcMax = c;
+            }
+            // ★ 每秒打一条玩家 `x` —— 上一次失败就是因为没有位移读数，只能靠猜"人到底走没走"。
+            if (i % 50 == 0)
+                L($"PROBE fix 判据② t={i * 0.02f:F1}s 马里奥x=" +
+                  $"{(StageContext.Player == null ? -999f : StageContext.Player.FeetPosition.x):F2} " +
+                  $"fsm={FsmNow} 剩余时间={StageContext.Score?.TimeLeft} 通关音源在播={lcOn}");
+            if (!endChecked && i % 50 == 0 && CountInLog("通关结算完成") > nDone)
+            {
+                endChecked = true;
+                endAudio = lastSt;
+                L($"PROBE fix 判据②倒计时结束那一刻的音源：{lastSt}");
+            }
+            if (FsmNow == "Loading" || FsmNow == "Result") break;
+        }
+        _stub.Hold(GameKey.RightArrow, false);
+        await Wait(0.5f);
+        var nMusicAfter = CountInLog(musicMark);
+        L($"PROBE fix 判据②通关音乐：启动沿 {lcStarts} 次（必须 = 1）、同一时刻最多 {lcMax} 个在播、" +
+          $"流程日志那一行 链路前 {nMusic} → 链路后 {nMusicAfter}（增量 {nMusicAfter - nMusic}，必须 = 1）");
+        L($"PROBE fix 判据②倒计时开始时的音源：{audioAtStart}");
+        // 这一行**只作参考、不作判据**：`LevelComplete.wav` 有 6 秒多，倒计时只有 ~7.9 秒，
+        // 结束时它"还在播"完全可能 —— 单看某一刻的 isPlaying 分不出"重播"与"一次很长"。
+        // 判"结束那一次不存在"靠的是上面两条：**启动沿 = 1**（重播必然再多一个上升沿）
+        // 与**同一时刻最多 1 个在播**（重播必然多出一个音源同时在放）。
+        L($"PROBE fix 判据②倒计时结束时的音源（仅供人工参考）：{endAudio}");
+        var okMusic = lcStarts == 1 && lcMax == 1 && (nMusicAfter - nMusic) == 1
+                      && audioAtStart.Contains("LevelComplete");
+        L($"PROBE fix 判据②结论：{(okMusic ? "PASS" : "FAIL")}" +
+          $"（期望 = 倒计时开始那一刻响一次、结束时不响；判据 = 启动沿 1 次 + 最多 1 个并发 + 流程日志增量 1）");
+
+        await TailToMenu("fix");
+    }
 }

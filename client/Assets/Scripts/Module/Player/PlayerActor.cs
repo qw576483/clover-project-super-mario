@@ -736,7 +736,10 @@ namespace SuperMario.Module.Player
                 x = _castleDoorX;
                 _motion = PlayerMotion.LevelClear;
                 Busy = false;
-                _audio?.PlaySfx(Sfx.LevelComplete);
+                // ⛔ 这里**不放**通关音乐（原先是 `_audio?.PlaySfx(Sfx.LevelComplete)`）：
+                //   用户 2026-09-20 点名「通关音乐会播两次，时间倒计时开始时候要，结束那次不要」——
+                //   全项目只在 `AppFlow.TickStage` 的「倒计时开始」那一刻放一次。
+                //   这一步只负责"人走进门消失 + 通知流程"。
                 // 走进门 = 人就该【不见了】（原版：进城堡后马里奥消失，只留城堡）。
                 // 踩过的坑：这里原先只是停下，于是马里奥站在城堡门口一动不动（实测被指出）。
                 if (_sr != null) _sr.enabled = false;
