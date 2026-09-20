@@ -1,0 +1,205 @@
+# Super Mario Bros. World 1-2 秘密金币房（管中密室）
+# 数据来源：原版资源/解析/原版1-1与1-2元素表.md §4.2（出处 = SMB-clone 的
+#           Assets/Scenes/World 1-2 - Underground.unity，103 个 prefab 实例逐格解析；
+#           §4.2 的表按列给了每一块的 clone 场景行号，图给了完整的逐格形状）。
+# 坐标系：本文件用 clone 场景的**格坐标原样** —— 与 client/Assets/Resources/Levels/World1-2.txt
+#         同一套（1-2 主关的 T 100..101 就是 clone world 100.5 的那根管），§4.2 的图表就是这个坐标。
+#   ┌ 出处（元素表 §4.2）───────── 本文件写出来的格 ─────────────┐
+#   左墙   x=-8,   y=0..10          → x=-8,   y=0..10      (11 块)
+#   天花   x=-5..4, y=7..10         → x=-5..4, y=7..10     (40 块)
+#   中墙   x=-5..4, y=3             → x=-5..3, y=3        (9 块；x=4 那格是多金币砖，见下 E 行)
+#   右墙   x=5,6,  y=2..10          → x=5,6,  y=2..10      (18 块)
+#   地面   x=-8..8, y=-2..-1        → x=-8..8, y=-2..-1    (34 块)
+#   出口管 x=7,8 管身 y=0..10 + 管口 x=5,6 y=0..1 → 同上 (26 块)
+#   金币   17 枚：y=4 八枚(x=-4..3)、y=0 九枚(x=-5..3)（§4.2「金币 17 枚」逐条列了行号）
+#   多金币砖 1 块：x=4,y=3（§4.2 图里的 M；表 x=4 行注「含多金币砖」`Wall Green Brick Block- MultiCoin`）
+#   玩家落点 clone (-6,9)（§4.2「玩家落点」行）→ 由流程层用 StageContext.SpawnOverride 指定，不写在这里
+# 格式见 tools/ai-skill/conventions.md：T <x> <y> <layer> <sprite> / E <x> <y> <prefab>
+# 注：墙/地面与 1-2 主关的墙用同一张瓦片（WorldTileSprites_1，clone 里本就是同一个 prefab 类
+#     `Wall Green Brick Block- Regular`）；它们是房间结构，**不转成可顶碎的砖块实体**
+#     （StageContext.SubArea 关掉那条转换），顶碎了人就能走出房间外。
+#     出口管与 1-1 密室的同形：管身 _18(左)/_19(右)、管顶 _5(左上)/_6(右上)。
+
+# ── 地面 x=-8..8（clone y=-2,-1）──
+T -8 -2 0 WorldTileSprites_1
+T -7 -2 0 WorldTileSprites_1
+T -6 -2 0 WorldTileSprites_1
+T -5 -2 0 WorldTileSprites_1
+T -4 -2 0 WorldTileSprites_1
+T -3 -2 0 WorldTileSprites_1
+T -2 -2 0 WorldTileSprites_1
+T -1 -2 0 WorldTileSprites_1
+T 0 -2 0 WorldTileSprites_1
+T 1 -2 0 WorldTileSprites_1
+T 2 -2 0 WorldTileSprites_1
+T 3 -2 0 WorldTileSprites_1
+T 4 -2 0 WorldTileSprites_1
+T 5 -2 0 WorldTileSprites_1
+T 6 -2 0 WorldTileSprites_1
+T 7 -2 0 WorldTileSprites_1
+T 8 -2 0 WorldTileSprites_1
+T -8 -1 0 WorldTileSprites_1
+T -7 -1 0 WorldTileSprites_1
+T -6 -1 0 WorldTileSprites_1
+T -5 -1 0 WorldTileSprites_1
+T -4 -1 0 WorldTileSprites_1
+T -3 -1 0 WorldTileSprites_1
+T -2 -1 0 WorldTileSprites_1
+T -1 -1 0 WorldTileSprites_1
+T 0 -1 0 WorldTileSprites_1
+T 1 -1 0 WorldTileSprites_1
+T 2 -1 0 WorldTileSprites_1
+T 3 -1 0 WorldTileSprites_1
+T 4 -1 0 WorldTileSprites_1
+T 5 -1 0 WorldTileSprites_1
+T 6 -1 0 WorldTileSprites_1
+T 7 -1 0 WorldTileSprites_1
+T 8 -1 0 WorldTileSprites_1
+
+# ── 左墙 x=-8（y=0..10）──
+T -8 0 0 WorldTileSprites_1
+T -8 1 0 WorldTileSprites_1
+T -8 2 0 WorldTileSprites_1
+T -8 3 0 WorldTileSprites_1
+T -8 4 0 WorldTileSprites_1
+T -8 5 0 WorldTileSprites_1
+T -8 6 0 WorldTileSprites_1
+T -8 7 0 WorldTileSprites_1
+T -8 8 0 WorldTileSprites_1
+T -8 9 0 WorldTileSprites_1
+T -8 10 0 WorldTileSprites_1
+
+# ── 天花 y=10（x=-5..4）──
+T -5 10 0 WorldTileSprites_1
+T -4 10 0 WorldTileSprites_1
+T -3 10 0 WorldTileSprites_1
+T -2 10 0 WorldTileSprites_1
+T -1 10 0 WorldTileSprites_1
+T 0 10 0 WorldTileSprites_1
+T 1 10 0 WorldTileSprites_1
+T 2 10 0 WorldTileSprites_1
+T 3 10 0 WorldTileSprites_1
+T 4 10 0 WorldTileSprites_1
+
+# ── 天花 y=9（x=-5..4）──
+T -5 9 0 WorldTileSprites_1
+T -4 9 0 WorldTileSprites_1
+T -3 9 0 WorldTileSprites_1
+T -2 9 0 WorldTileSprites_1
+T -1 9 0 WorldTileSprites_1
+T 0 9 0 WorldTileSprites_1
+T 1 9 0 WorldTileSprites_1
+T 2 9 0 WorldTileSprites_1
+T 3 9 0 WorldTileSprites_1
+T 4 9 0 WorldTileSprites_1
+
+# ── 天花 y=8（x=-5..4）──
+T -5 8 0 WorldTileSprites_1
+T -4 8 0 WorldTileSprites_1
+T -3 8 0 WorldTileSprites_1
+T -2 8 0 WorldTileSprites_1
+T -1 8 0 WorldTileSprites_1
+T 0 8 0 WorldTileSprites_1
+T 1 8 0 WorldTileSprites_1
+T 2 8 0 WorldTileSprites_1
+T 3 8 0 WorldTileSprites_1
+T 4 8 0 WorldTileSprites_1
+
+# ── 天花 y=7（x=-5..4）──
+T -5 7 0 WorldTileSprites_1
+T -4 7 0 WorldTileSprites_1
+T -3 7 0 WorldTileSprites_1
+T -2 7 0 WorldTileSprites_1
+T -1 7 0 WorldTileSprites_1
+T 0 7 0 WorldTileSprites_1
+T 1 7 0 WorldTileSprites_1
+T 2 7 0 WorldTileSprites_1
+T 3 7 0 WorldTileSprites_1
+T 4 7 0 WorldTileSprites_1
+
+# ── 右墙 x=5、x=6（y=2..10）──
+T 5 2 0 WorldTileSprites_1
+T 5 3 0 WorldTileSprites_1
+T 5 4 0 WorldTileSprites_1
+T 5 5 0 WorldTileSprites_1
+T 5 6 0 WorldTileSprites_1
+T 5 7 0 WorldTileSprites_1
+T 5 8 0 WorldTileSprites_1
+T 5 9 0 WorldTileSprites_1
+T 5 10 0 WorldTileSprites_1
+T 6 2 0 WorldTileSprites_1
+T 6 3 0 WorldTileSprites_1
+T 6 4 0 WorldTileSprites_1
+T 6 5 0 WorldTileSprites_1
+T 6 6 0 WorldTileSprites_1
+T 6 7 0 WorldTileSprites_1
+T 6 8 0 WorldTileSprites_1
+T 6 9 0 WorldTileSprites_1
+T 6 10 0 WorldTileSprites_1
+
+# ── 中墙 y=3（x=-5..3；x=4 是多金币砖，见文件末 E 行）──
+T -5 3 0 WorldTileSprites_1
+T -4 3 0 WorldTileSprites_1
+T -3 3 0 WorldTileSprites_1
+T -2 3 0 WorldTileSprites_1
+T -1 3 0 WorldTileSprites_1
+T 0 3 0 WorldTileSprites_1
+T 1 3 0 WorldTileSprites_1
+T 2 3 0 WorldTileSprites_1
+T 3 3 0 WorldTileSprites_1
+
+# ── 出口侧向管：管口 x=5,6（y=0,1）──
+T 5 0 0 WorldTileSprites_44
+T 5 1 0 WorldTileSprites_31
+T 6 0 0 WorldTileSprites_45
+T 6 1 0 WorldTileSprites_32
+
+# ── 出口侧向管：管身 x=7,8（y=0..10，管顶 y=10 用 _5/_6）──
+T 7 0 0 WorldTileSprites_18
+T 7 1 0 WorldTileSprites_18
+T 7 2 0 WorldTileSprites_18
+T 7 3 0 WorldTileSprites_18
+T 7 4 0 WorldTileSprites_18
+T 7 5 0 WorldTileSprites_18
+T 7 6 0 WorldTileSprites_18
+T 7 7 0 WorldTileSprites_18
+T 7 8 0 WorldTileSprites_18
+T 7 9 0 WorldTileSprites_18
+T 7 10 0 WorldTileSprites_5
+T 8 0 0 WorldTileSprites_19
+T 8 1 0 WorldTileSprites_19
+T 8 2 0 WorldTileSprites_19
+T 8 3 0 WorldTileSprites_19
+T 8 4 0 WorldTileSprites_19
+T 8 5 0 WorldTileSprites_19
+T 8 6 0 WorldTileSprites_19
+T 8 7 0 WorldTileSprites_19
+T 8 8 0 WorldTileSprites_19
+T 8 9 0 WorldTileSprites_19
+T 8 10 0 WorldTileSprites_6
+
+# E <x> <y> <prefab>
+# ── 17 枚金币（元素表 §4.2「金币 17 枚」）──
+# 实体坐标 = 格中心（X+0.5，见 tools/ai-skill/conventions.md「关卡文件里的实体坐标是格中心」）：
+#   中墙顶那一排 y=4 ⇒ 中心 y=4.5，x=-4..3 ⇒ 中心 x=-3.5..3.5（8 枚）
+#   地面那一排   y=0 ⇒ 中心 y=0.5，x=-5..3 ⇒ 中心 x=-4.5..3.5（9 枚）
+E -3.5 4.5 Coin
+E -2.5 4.5 Coin
+E -1.5 4.5 Coin
+E -0.5 4.5 Coin
+E 0.5 4.5 Coin
+E 1.5 4.5 Coin
+E 2.5 4.5 Coin
+E 3.5 4.5 Coin
+E -4.5 0.5 Coin
+E -3.5 0.5 Coin
+E -2.5 0.5 Coin
+E -1.5 0.5 Coin
+E -0.5 0.5 Coin
+E 0.5 0.5 Coin
+E 1.5 0.5 Coin
+E 2.5 0.5 Coin
+E 3.5 0.5 Coin
+
+# ── 多金币砖 1 块：格 (4,3)（§4.2 图里的 M）⇒ 中心 (4.5, 3.5) ──
+E 4.5 3.5 BrickMultiCoin

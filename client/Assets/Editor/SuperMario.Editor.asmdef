@@ -1,0 +1,20 @@
+{
+  "name": "SuperMario.Editor",
+  "rootNamespace": "SuperMario.EditorTools",
+  "references": [
+    "SuperMario",
+    "CloverEngine.Core",
+    "CloverEngine.Resource"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

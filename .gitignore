@@ -1,0 +1,57 @@
+﻿
+# ★ AI 临时目录（skill §1.8）
+.ai-tmp/
+# ★ 原版资源（skill §1.9）
+原版资源/
+
+# 项目自身：机器本地 / Unity 模板带来的东西（已移出工程到 .ai-tmp/unused-resources/，可搬回）
+client/setting/
+client/Assets/Welcome/
+client/Assets/Settings/Lit2DSceneTemplate.scenetemplate
+client/Assets/Settings/Scenes/
+
+# 取证截图：**一次性产物，不进仓库**（用户明确：验收完就删）
+# 探针会把图落在 client/Assets/Screenshots/；这一条保证它不会被误提交。
+client/Assets/Screenshots/
+
+# ── Unity 派生 / 缓存 / 机器相关产物（**不要提交**）─────────────────────────────
+# 实测本仓库 client/ 共 1823 MB，其中 Library 独占 1769 MB / 26821 个文件 ——
+# 它是 Unity 的导入缓存，换台机器会自动重建；提交它既撑爆仓库又毫无价值。
+client/[Ll]ibrary/
+client/[Tt]emp/
+client/[Oo]bj/
+client/[Ll]ogs/
+client/[Bb]uild/
+client/[Bb]uilds/
+client/[Uu]ser[Ss]ettings/
+client/[Mm]emoryCaptures/
+client/[Rr]ecordings/
+client/setting/
+client/[Aa]ssets/[Aa]ssetStoreTools*
+client/[Aa]ssets/[Pp]lugins/[Ee]ditor/JetBrains*
+
+# Unity / IDE 生成物
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+.vs/
+.idea/
+*.DotSettings.user
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+*.apk
+*.aab
+*.ipa
+*.unitypackage
+crashlytics-build.properties
+

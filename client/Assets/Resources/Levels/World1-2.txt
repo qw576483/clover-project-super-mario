@@ -1,0 +1,997 @@
+# Super Mario Bros. World 1-2 - extracted from the SMB-clone scene
+# T <x> <y> <layer> <sprite>      layer 0 = terrain, 1 = background
+# E <x> <y> <prefab>
+# E <x> <y> MovingPlatform <downStopY> <upStopY> <startDir>    ← 升降台多带 3 个数（见下）
+#
+# ── 升降台（原版 Prefabs/Platforms/Moving Platform Vertical Spawner）─────────
+# 一个数都不编：下面每一项都能指到 prefab 字段或场景实例行号（行号 = 该文件 1-based 行号）。
+#   · 上止点：`Moving Platform Vertical Spawner.prefab:98`  Up Stop   local y = +16.5
+#   · 下止点：同文件 `:111`                               Down Stop local y = −6.5
+#   · 出现点：同文件 `:124`                               Spawn Pos local y = +11（prefab 默认值，两个实例都覆写了）
+#   · 初速方向：同文件 `:144`                             directionY = −1（prefab 默认值）
+#   · 速度：`Moving Platform Vertical.prefab:172`         absSpeed: 0.05（单位/帧）⇒ ×60fps = 3 格/秒
+#   · 止点停留：同文件 `:175` `:176`                      waitAtUpStop / waitAtDownStop 都是 0
+#   · 实例 A：`Scenes/World 1-2.unity:1588`（对象名 `Moving Platform Vertical Spawner (1)`）
+#       root m_LocalPosition (152.8, 0, 0)（`:1595-1602`）、Spawn Pos y = −4（`:1638`）、directionY = +1（`:1634`）
+#   · 实例 B：`Scenes/World 1-2.unity:9629`（对象名 `Moving Platform Vertical Spawner`，未改名）
+#       root m_LocalPosition (137.8, 0, 0)（`:9636-9643`）、Spawn Pos y = 14（`:9670`）、方向取 prefab 默认 −1
+#   · 父容器 `Moving Platform Spawners` @ (0,0)（`:23263-23270`）⇒ 止点的**世界** y = root.y + 上面的 local y
+#       ⇒ 1-2 两台共用同一条带 **y ∈ [−6.5, +16.5] = 行程 23 格**
+#   · 台面尺寸：`Moving Platform Vertical.prefab:121`（BoxCollider2D）与 `:227`（SpriteRenderer）
+#       都是 `m_Size: {x: 3, y: 0.5}` —— **3 格宽 × 半格厚**；贴图 = 同 prefab `:222` 的 `m_Sprite`
+#       （`misc-3.gif` 的 `moving_platform_6`，rect (143,1201) 48×8 px = 3×0.5 格；
+#        裁切脚本 `原版资源/解析/脚本/gen_platform_sprite.py`，可复跑 + 自检）
+#   · 台面中心：prefab 的精灵 pivot 是 0.5/0.5 ⇒ 上面这些 `Up/Down Stop` / `Spawn Pos` 的 y
+#       都是**台面中心**的 y（不是下沿）。所以台面顶面 = 中心 y + 0.25 格。
+#   · 台面 x **不落格心**：`E <x>` 直接写 clone 场景里 spawner 的世界 x（152.8 / 137.8）——
+#       全项目其它实体按 `floor(x)+0.5` 落格心，这一件不行（落格心会差 0.3 格，见对照表 E-21 ③）。
+#   · 生成方式：spawner 每 **1.5 秒**生成一台（初值 = 间隔的一半 = 0.75 秒）+ **离屏即销毁**
+#       —— `Assets/Scripts/MovingPlatformVerticalSpawner.cs:14,23,39-47`、
+#       `Assets/Scripts/_common/DestroyOutOfScreen.cs:21-23`；
+#       且只在马里奥**水平 40 格**之内才生成 —— 同文件 `:15` `minDistanceToMove = 40`。
+#   · 这一关**没有** `Moving Platform Vertical Struct` 实例（那个 prefab 的 +7/−2 = 9 格是 **1-3** 的，
+#     见 `Scenes/World 1-3.unity:111-166`）—— 别把 1-3 的值搬到 1-2 来。
+# 复核（可复跑，从 prefab + 场景重新解析再与本文件比对）：`python 原版资源/解析/脚本/check_sections_12.py` 第 5 段。
+#
+# ── 本段的出生点（2026-09-19 订正：改用原版 `Spawn Point`，不再用通用兜底）───
+# spawn 0 9
+#   ｜出处（三段，缺一不可）：
+#   ｜ ① 原版摆的是哪个点：clone `Scenes/World 1-2.unity` 的 `Spawn Points` 容器
+#   ｜    （transform `&379062240`）`m_Children` 的第 1 项 = `&887453261`，而它正是
+#   ｜    `PrefabInstance &887453260`（= `Spawn Point`，local/world **(0,9)**）的实例本体；
+#   ｜    第 2 项 `&174070772` 对应 `&174070771` = `Spawn Point (1)` @ (90,-0.5)。
+#   ｜ ② 为什么第 0 个才是出生点：`Assets/Scripts/GameStateManager.cs:32` 把
+#   ｜    `spawnPointIdx` 初始化成 **0**，`LevelManager.cs:568` 取
+#   ｜    `Spawn Points.transform.GetChild(spawnPointIdx)` 当出生点；另一个点要
+#   ｜    `SpawnPoint.cs:18` 走过它（`mario.x >= 它的 x`）才会把 idx 提到 1 ⇒ 它是**中途检查点**。
+#   ｜ ③ 这个点在地形上成立：原版整关海报 `策划/基线图/nes-original-1-2-full-map.png`
+#   ｜    （定标 col=x+3 / row=27−y）的 row 17（= y=10 的天花板那一行）**从 col 6（x=3）起**
+#   ｜    才是实心，col 1..5（x=−2..2）是**缺口**；本文的 T 行同样是"y=10 从 x=3 起" ⇒
+#   ｜    (0,9) 正好落在缺口正下方，马里奥掉 9 格落到地面 y=0（原版 1-2 就是这么进场的）。
+#   ｜改前用的是 `StageSession.SpawnPlayer` 的兜底规则 `MinTileX + 3.5` = (0.5,0) —— 那是
+#   ｜**写不出出处的量**（原版摆的是 (0,9)、x 也差 0.5），违反 skill §0 铁律 3。
+#   ｜⚠️ 开局最近的两只栗宝宝（本文件 `E 13 0` / `E 14 1`）**一个数都没动**：它们与
+#   ｜   clone 的 `Green Goomba`（同格）以及原版海报上那两处精灵（缺口下方 row 27 的
+#   ｜   col 16 / row 26 的 col 17）**逐格一致**。所以"出生点 ↔ 栗宝宝"的距离 = 原版的
+#   ｜   13 / 14 格（改前 (0.5,0) 是 12.5 / 13.5 格）—— 订正后**与原版同值**。
+#   ｜   该距离在运行时能换到多少"站着不动"的时间，见验收表 #12-2 的注（含入场卡期间
+#   ｜   世界仍在跑这条既存缺陷的实测读数）。
+#
+# ── 本段的通关形态（全部取自 clone 场景，不是这里推的）─────────────────────
+# no-flagpole
+#   ｜本段**没有**旗杆/城堡。原版 1-2 是两段：旗杆与城堡在**地表段**
+#   ｜（clone `World 1-2 - Castle Cut.unity`，Goal Post x=19、Small Castle x=25），
+#   ｜这一段（`World 1-2.unity`）的结尾是一根侧向管。
+#   ｜早先用"右边界-25.5"的公式在这里硬推了一根旗杆（x=166.5），而按真值那里是
+#   ｜实心墙（墙 x=157..173,y=0..2，出处 = 该区间里的 Wall Green Brick Block 实例）
+#   ｜+ 地板空洞（x=152..160 无地面）—— 过场时人被摆进墙里、脚下没地板，掉出世界。
+# side-exit 163 3
+#   ｜走到 x=163 的管口面（站在墙顶 y=3）就切到地表段 —— 对应原版
+#   ｜`Warp Green Pipe Side Short.prefab` @ clone (165.5, 3.5)（管口朝左、管身向上）。
+#   ｜
+#   ｜★ 落格真值（2026-09-19 重定。权威载体 = **原版整关海报**
+#   ｜   `策划/基线图/nes-original-1-2-full-map.png`：它是**原版游戏的像素图**、16x16 px = 1 格、
+#   ｜   原版瓦片都落在整数格上 ⇒ 它是"这根管该落哪一格"的唯一权威）：
+#   ｜     · 海报 ↔ 本文件的定标（两条**独立**特征各自验证过）：
+#   ｜         col = x + 3   （由地下段地板缺口 x=157..159 与 y=10 的横梁同时定出）
+#   ｜         row = 27 − y  （本文件 y=0..2 的 3 行地板 = 海报 row 27,26,25）
+#   ｜     · 海报上这根管 = **20 格**：管口 (163,3)(163,4)(164,3)(164,4)、
+#   ｜       拐角+管身 (165,3..10) 与 (166,3..10)。
+#   ｜       为什么管身那 2 列是 165,166：原版这两列在 y=3..10 **没有墙块**（= 墙上的缺口），
+#   ｜       墙从 x=167 起 ⇒ 管身正好填住那个 2x8 的缺口、与墙**齐平无缝隙**（海报上同形）。
+#   ｜     · 本文件已按这 20 格落位。**可复跑判据**：`python .ai-tmp/test/check_pipe_vs_poster.py`
+#   ｜       ⇒ 管的格集合逐个相等 + 窗口 135 格类别逐格一致（summary: PASS）。
+#   ｜       （生成器同口径：`原版资源/解析/脚本/gen_12_levels.py` 的 `gen_underground()`，
+#   ｜         重跑它对本文件是**幂等**的。）
+#   ｜   ⚠️ 旧口径 `px = int(165.5) = 165` 把 **prefab 原点**当成了管口左列，整根**右移 2 格**（已改）。
+#   ｜      任务书里说的"偏 2.5 格"= 本工程管身中心(168) 与 prefab 原点 x(165.5) 之差；
+#   ｜      而克隆那条 prefab **自己**比原版偏 0.5 格（原点落在半格上、管身只有 1.75 格宽，
+#   ｜      见下面的 world 范围）⇒ 按**原版**落格后实际位移是 2 格，不是 2.5 格。
+#   ｜
+#   ｜★ 贴图真值（2026-09-19 从原版 prefab 逐节点 + misc-3.gif 逐像素重解，⛔ 不是我们自己的产物）：
+#   ｜   prefab 里那根侧向管由**三种** sprite 组成（出处 = 该 prefab 的 SpriteRenderer
+#   ｜   `m_Sprite` 反查 misc-3.gif.meta）：
+#   ｜     · `pipe_green_top_side` @ local(-2,0)  32x32 = **管口**（2x2 格）= rect (573,1118,32,32)
+#   ｜     · `pipe_green_mid`      @ local(-0.19,0) 34x32 = **管口右侧那一段（拐角）**（2x2 格）
+#   ｜       = rect (610,1118,34,32)
+#   ｜     · `pipe_green_body`     @ local(0, 1.4..6.5) 28x16 ×7 = **向上的管身** = rect (616,1154,28,16)
+#   ｜   ⚠️ 早先文件头写「贴图是 pipe_green_top_side / pipe_green_mid」并把 `_32`/`_45` 记成
+#   ｜      "中段 pipe_green_mid" —— **那条是错的**：`_32`/`_45` 是 `pipe_green_top_side` 的
+#   ｜      右半两个象限。真的 `pipe_green_mid` 对应本工程 `_57`/`_70`（左列上/下）
+#   ｜      与 `_58`/`_71`（右列上/下）。
+#   ｜   本工程的落位（可复跑：`python .ai-tmp/test/pipe_side_by_side.py after`）：
+#   ｜     · 管口 2x2 = x=163,164 / y=3,4 -> `_44`(左下) `_31`(左上) `_45`(右下) `_32`(右上)
+#   ｜     · 拐角 2x2 = x=165,166 / y=3,4 -> `_70`(左下) `_57`(左上) `_71`(右下) `_58`(右上)
+#   ｜     · 管身 x=165,166 / y=5..10 -> `_18`/`_19`
+#   ｜       （`_18` 的列 2..15 + `_19` 的列 0..13 拼起来与 `pipe_green_body` 28x16
+#   ｜         **逐像素差 0/448** ⇒ 它就是原版管身那张图；`_18`/`_19` 因此**不是**"立管专用"）
+#   ｜     · 这 4x8 格全部 layer 0（实心）：原版 prefab 的实体范围就是这 4x8 ——
+#   ｜       `BoxCollider2D &61163164953615622`（root，offset(0,3) size(1.8,8)）、
+#   ｜       `BoxCollider2D &61583125456029914`（Portal，offset(-2,0) size(0.2,2)
+#   ｜       = 管口面那道挡墙，玩家被它挡在 x=163.4 ⇒ 落格 163）、
+#   ｜       两条 `EdgeCollider2D`（local y=±1，x=-3..0.9，即管口的上下面）。
+#   ｜       所以"管口那 4 格可穿过"是旧的错口径：原版走不进去。
+#   ｜
+#   ｜ℹ️ 已知（**不是**待改项）：克隆 prefab 里那根管的 world 范围是 x=162.5..166.4、y=2.5..10.5
+#   ｜   （管口 x=162.5..164.5、拐角/管身 x=164.6..166.4），而原版海报上是 x=163..167、y=3..11
+#   ｜   ⇒ 克隆那条 prefab 整体偏左下各 0.5 格（它的原点 165.5 在半格上、管身 1.75 格宽）。
+#   ｜   本文件对齐的是**原版海报**（整数格），不是克隆 prefab 的半格坐标 —— 两者差 0.5 格，
+#   ｜   而本工程的关卡数据是整数格制（`T <int x> <int y>`），0.5 格无法表示也不该表示。
+E 58 4 Coin
+T 21 10 0 WorldTileSprites_1
+T 98 10 0 WorldTileSprites_1
+E 106.5 2 Piranha
+T 70 7 0 WorldTileSprites_1
+T 20 0 0 WorldTileSprites_1
+T 20 1 0 WorldTileSprites_1
+T 20 2 0 WorldTileSprites_1
+T 20 3 0 WorldTileSprites_1
+T 69 7 0 WorldTileSprites_1
+E 26 4 MysteryBox
+T 70 3 0 WorldTileSprites_1
+T 51 2 0 WorldTileSprites_1
+E 74.5 4 Goomba
+T 59 7 0 WorldTileSprites_1
+T 60 9 0 WorldTileSprites_1
+T 42 -2 0 WorldTileSprites_1
+T 42 -1 0 WorldTileSprites_1
+T 43 -2 0 WorldTileSprites_1
+T 43 -1 0 WorldTileSprites_1
+T 44 -2 0 WorldTileSprites_1
+T 44 -1 0 WorldTileSprites_1
+T 45 -2 0 WorldTileSprites_1
+T 45 -1 0 WorldTileSprites_1
+T 46 -2 0 WorldTileSprites_1
+T 46 -1 0 WorldTileSprites_1
+T 47 -2 0 WorldTileSprites_1
+T 47 -1 0 WorldTileSprites_1
+T 48 -2 0 WorldTileSprites_1
+T 48 -1 0 WorldTileSprites_1
+E 41 7 Coin
+T 92 10 0 WorldTileSprites_1
+T 74 8 0 WorldTileSprites_1
+T 63 8 0 WorldTileSprites_1
+T 77 10 0 WorldTileSprites_1
+E 152.8 -4 MovingPlatform -6.5 16.5 1
+T 74 10 0 WorldTileSprites_1
+E 81 7 Coin
+E 132 3 Goomba
+T 74 3 0 WorldTileSprites_1
+T 73 3 0 WorldTileSprites_1
+T 23 10 0 WorldTileSprites_1
+T 132 -2 0 WorldTileSprites_1
+T 132 -1 0 WorldTileSprites_1
+T 133 -2 0 WorldTileSprites_1
+T 133 -1 0 WorldTileSprites_1
+T 134 -2 0 WorldTileSprites_1
+T 134 -1 0 WorldTileSprites_1
+T 135 -2 0 WorldTileSprites_1
+T 135 -1 0 WorldTileSprites_1
+T 136 -2 0 WorldTileSprites_1
+T 136 -1 0 WorldTileSprites_1
+T 38 3 0 WorldTileSprites_1
+E 7 3 MysteryBoxMushroom
+T 123 10 0 WorldTileSprites_1
+T 126 -2 0 WorldTileSprites_1
+T 126 -1 0 WorldTileSprites_1
+T 127 -2 0 WorldTileSprites_1
+T 127 -1 0 WorldTileSprites_1
+T 128 -2 0 WorldTileSprites_1
+T 128 -1 0 WorldTileSprites_1
+T 129 -2 0 WorldTileSprites_1
+T 129 -1 0 WorldTileSprites_1
+T 130 -2 0 WorldTileSprites_1
+T 130 -1 0 WorldTileSprites_1
+T 131 -2 0 WorldTileSprites_1
+T 131 -1 0 WorldTileSprites_1
+T 132 -2 0 WorldTileSprites_1
+T 132 -1 0 WorldTileSprites_1
+T 106 10 0 WorldTileSprites_1
+E 41 0.25 Koopa
+T 107 10 0 WorldTileSprites_1
+T 21 -2 0 WorldTileSprites_1
+T 21 -1 0 WorldTileSprites_1
+T 22 -2 0 WorldTileSprites_1
+T 22 -1 0 WorldTileSprites_1
+T 23 -2 0 WorldTileSprites_1
+T 23 -1 0 WorldTileSprites_1
+T 24 -2 0 WorldTileSprites_1
+T 24 -1 0 WorldTileSprites_1
+T 25 -2 0 WorldTileSprites_1
+T 25 -1 0 WorldTileSprites_1
+T 26 -2 0 WorldTileSprites_1
+T 26 -1 0 WorldTileSprites_1
+T 27 -2 0 WorldTileSprites_1
+T 27 -1 0 WorldTileSprites_1
+T 84 5 0 WorldTileSprites_1
+T 76 8 0 WorldTileSprites_1
+T 49 3 0 WorldTileSprites_1
+T 116 -2 0 WorldTileSprites_1
+T 116 -1 0 WorldTileSprites_1
+T 60 3 0 WorldTileSprites_1
+T 40 10 0 WorldTileSprites_1
+T 13 10 0 WorldTileSprites_1
+T 9 10 0 WorldTileSprites_1
+T 120 10 0 WorldTileSprites_1
+T 120 1 0 WorldTileSprites_1
+T 50 6 0 WorldTileSprites_1
+E 69 8 Goomba
+T -3 6 0 WorldTileSprites_1
+T 50 3 0 WorldTileSprites_1
+T 132 0 0 WorldTileSprites_1
+T 132 1 0 WorldTileSprites_1
+T 132 2 0 WorldTileSprites_1
+E 42.5 0.25 Koopa
+T 119 2 0 WorldTileSprites_1
+E 10 3 MysteryBox
+T 65 8 0 WorldTileSprites_1
+E 56 0.25 Koopa
+T 134 0 0 WorldTileSprites_1
+T 134 1 0 WorldTileSprites_1
+T 134 2 0 WorldTileSprites_1
+T 134 3 0 WorldTileSprites_1
+T 84 10 0 WorldTileSprites_1
+T 118 10 0 WorldTileSprites_1
+T 49 4 0 WorldTileSprites_1
+T 64 5 0 WorldTileSprites_1
+E 100.5 1 Piranha
+T 83 -2 0 WorldTileSprites_1
+T 83 -1 0 WorldTileSprites_1
+T 84 -2 0 WorldTileSprites_1
+T 84 -1 0 WorldTileSprites_1
+T 85 -2 0 WorldTileSprites_1
+T 85 -1 0 WorldTileSprites_1
+T 86 -2 0 WorldTileSprites_1
+T 86 -1 0 WorldTileSprites_1
+T 87 -2 0 WorldTileSprites_1
+T 87 -1 0 WorldTileSprites_1
+T 88 -2 0 WorldTileSprites_1
+T 88 -1 0 WorldTileSprites_1
+T 89 -2 0 WorldTileSprites_1
+T 89 -1 0 WorldTileSprites_1
+T 41 5 0 WorldTileSprites_1
+T 31 10 0 WorldTileSprites_1
+T 70 10 0 WorldTileSprites_1
+T 59 5 0 WorldTileSprites_1
+T 4 10 0 WorldTileSprites_1
+T 60 4 0 WorldTileSprites_1
+T 22 0 0 WorldTileSprites_1
+T 22 1 0 WorldTileSprites_1
+T 22 2 0 WorldTileSprites_1
+T 22 3 0 WorldTileSprites_1
+T -3 0 0 WorldTileSprites_1
+T 60 6 0 WorldTileSprites_1
+T 127 10 0 WorldTileSprites_1
+T 132 10 0 WorldTileSprites_1
+T 41 10 0 WorldTileSprites_1
+E 61 0 Goomba
+T 86 5 0 WorldTileSprites_1
+T 64 10 0 WorldTileSprites_1
+T 82 10 0 WorldTileSprites_1
+T 52 8 0 WorldTileSprites_1
+E 11 3 MysteryBox
+T 88 10 0 WorldTileSprites_1
+T 64 6 0 WorldTileSprites_1
+T 117 10 0 WorldTileSprites_1
+T 81 10 0 WorldTileSprites_1
+T 68 10 0 WorldTileSprites_1
+T 57 10 0 WorldTileSprites_1
+T 119 10 0 WorldTileSprites_1
+T 50 5 0 WorldTileSprites_1
+T 106 0 0 WorldTileSprites_18
+T 106 1 0 WorldTileSprites_18
+T 106 2 0 WorldTileSprites_18
+T 106 3 0 WorldTileSprites_5
+T 107 0 0 WorldTileSprites_19
+T 107 1 0 WorldTileSprites_19
+T 107 2 0 WorldTileSprites_19
+T 107 3 0 WorldTileSprites_6
+E 84 7 Coin
+T 58 10 0 WorldTileSprites_1
+T 60 10 0 WorldTileSprites_1
+T 55 9 0 WorldTileSprites_1
+T 49 10 0 WorldTileSprites_1
+T 43 10 0 WorldTileSprites_1
+T 35 -2 0 WorldTileSprites_1
+T 35 -1 0 WorldTileSprites_1
+T 36 -2 0 WorldTileSprites_1
+T 36 -1 0 WorldTileSprites_1
+T 37 -2 0 WorldTileSprites_1
+T 37 -1 0 WorldTileSprites_1
+T 38 -2 0 WorldTileSprites_1
+T 38 -1 0 WorldTileSprites_1
+T 39 -2 0 WorldTileSprites_1
+T 39 -1 0 WorldTileSprites_1
+T 40 -2 0 WorldTileSprites_1
+T 40 -1 0 WorldTileSprites_1
+T 41 -2 0 WorldTileSprites_1
+T 41 -1 0 WorldTileSprites_1
+E 70 4 MysteryBox
+T 56 9 0 WorldTileSprites_1
+T 56 -2 0 WorldTileSprites_1
+T 56 -1 0 WorldTileSprites_1
+T 57 -2 0 WorldTileSprites_1
+T 57 -1 0 WorldTileSprites_1
+T 58 -2 0 WorldTileSprites_1
+T 58 -1 0 WorldTileSprites_1
+T 59 -2 0 WorldTileSprites_1
+T 59 -1 0 WorldTileSprites_1
+T 60 -2 0 WorldTileSprites_1
+T 60 -1 0 WorldTileSprites_1
+T 61 -2 0 WorldTileSprites_1
+T 61 -1 0 WorldTileSprites_1
+T 62 -2 0 WorldTileSprites_1
+T 62 -1 0 WorldTileSprites_1
+T 80 10 0 WorldTileSprites_1
+T 37 10 0 WorldTileSprites_1
+T 94 10 0 WorldTileSprites_1
+T 46 10 0 WorldTileSprites_1
+T 38 10 0 WorldTileSprites_1
+T 74 9 0 WorldTileSprites_1
+T 7 10 0 WorldTileSprites_1
+T 99 10 0 WorldTileSprites_1
+T 59 3 0 WorldTileSprites_1
+T 28 -2 0 WorldTileSprites_1
+T 28 -1 0 WorldTileSprites_1
+T 29 -2 0 WorldTileSprites_1
+T 29 -1 0 WorldTileSprites_1
+T 30 -2 0 WorldTileSprites_1
+T 30 -1 0 WorldTileSprites_1
+T 31 -2 0 WorldTileSprites_1
+T 31 -1 0 WorldTileSprites_1
+T 32 -2 0 WorldTileSprites_1
+T 32 -1 0 WorldTileSprites_1
+T 33 -2 0 WorldTileSprites_1
+T 33 -1 0 WorldTileSprites_1
+T 34 -2 0 WorldTileSprites_1
+T 34 -1 0 WorldTileSprites_1
+T 85 10 0 WorldTileSprites_1
+T 30 10 0 WorldTileSprites_1
+T 75 9 0 WorldTileSprites_1
+T 51 3 0 WorldTileSprites_1
+T 45 10 0 WorldTileSprites_1
+T 14 10 0 WorldTileSprites_1
+E 26 0 Goomba
+T 126 10 0 WorldTileSprites_1
+T 66 10 0 WorldTileSprites_1
+E 133.5 4 Goomba
+E 137.8 14 MovingPlatform -6.5 16.5 -1
+T 76 3 0 WorldTileSprites_1
+T -3 10 0 WorldTileSprites_1
+T 53 10 0 WorldTileSprites_1
+T 64 7 0 WorldTileSprites_1
+T 16 0 0 WorldTileSprites_1
+T 16 1 0 WorldTileSprites_1
+T 52 2 0 WorldTileSprites_1
+T 86 4 0 WorldTileSprites_1
+T 60 7 0 WorldTileSprites_1
+T 70 6 0 WorldTileSprites_1
+T 36 10 0 WorldTileSprites_1
+T 56 3 0 WorldTileSprites_1
+T 69 10 0 WorldTileSprites_1
+T 5 10 0 WorldTileSprites_1
+T 59 8 0 WorldTileSprites_1
+T 49 5 0 WorldTileSprites_1
+T 100 0 0 WorldTileSprites_18
+T 100 1 0 WorldTileSprites_18
+T 100 2 0 WorldTileSprites_5
+T 101 0 0 WorldTileSprites_19
+T 101 1 0 WorldTileSprites_19
+T 101 2 0 WorldTileSprites_6
+T 37 3 0 WorldTileSprites_1
+T 83 4 0 WorldTileSprites_1
+T 52 10 0 WorldTileSprites_1
+T 61 10 0 WorldTileSprites_1
+T 3 10 0 WorldTileSprites_1
+T 64 9 0 WorldTileSprites_1
+T 66 8 0 WorldTileSprites_1
+T 50 4 0 WorldTileSprites_1
+T 40 5 0 WorldTileSprites_1
+T 38 4 0 WorldTileSprites_1
+T 29 10 0 WorldTileSprites_1
+E 39 7 Coin
+T 116 10 0 WorldTileSprites_1
+T 111 10 0 WorldTileSprites_1
+T 64 4 0 WorldTileSprites_1
+T 12 10 0 WorldTileSprites_1
+T 51 9 0 WorldTileSprites_1
+T 44 10 0 WorldTileSprites_1
+T 124 10 0 WorldTileSprites_1
+T 52 3 0 WorldTileSprites_1
+T 130 10 0 WorldTileSprites_1
+E 56 4 Coin
+T 79 10 0 WorldTileSprites_1
+T 18 10 0 WorldTileSprites_1
+T 101 10 0 WorldTileSprites_1
+T 133 0 0 WorldTileSprites_1
+T 133 1 0 WorldTileSprites_1
+T 133 2 0 WorldTileSprites_1
+T 133 3 0 WorldTileSprites_1
+T 122 10 0 WorldTileSprites_1
+E 59 0 Goomba
+T 57 3 0 WorldTileSprites_1
+T 75 3 0 WorldTileSprites_1
+T 64 3 0 WorldTileSprites_1
+T 69 6 0 WorldTileSprites_1
+T -3 5 0 WorldTileSprites_1
+T 90 -2 0 WorldTileSprites_1
+T 90 -1 0 WorldTileSprites_1
+T 91 -2 0 WorldTileSprites_1
+T 91 -1 0 WorldTileSprites_1
+T 92 -2 0 WorldTileSprites_1
+T 92 -1 0 WorldTileSprites_1
+T 93 -2 0 WorldTileSprites_1
+T 93 -1 0 WorldTileSprites_1
+T 94 -2 0 WorldTileSprites_1
+T 94 -1 0 WorldTileSprites_1
+T 95 -2 0 WorldTileSprites_1
+T 95 -1 0 WorldTileSprites_1
+T 96 -2 0 WorldTileSprites_1
+T 96 -1 0 WorldTileSprites_1
+E 110 0 Goomba
+E 86 10 MysteryBoxOneUp
+E 99 0 Goomba
+T 51 1 0 WorldTileSprites_1
+T 35 10 0 WorldTileSprites_1
+T 14 -2 0 WorldTileSprites_1
+T 14 -1 0 WorldTileSprites_1
+T 15 -2 0 WorldTileSprites_1
+T 15 -1 0 WorldTileSprites_1
+T 16 -2 0 WorldTileSprites_1
+T 16 -1 0 WorldTileSprites_1
+T 17 -2 0 WorldTileSprites_1
+T 17 -1 0 WorldTileSprites_1
+T 18 -2 0 WorldTileSprites_1
+T 18 -1 0 WorldTileSprites_1
+T 19 -2 0 WorldTileSprites_1
+T 19 -1 0 WorldTileSprites_1
+T 20 -2 0 WorldTileSprites_1
+T 20 -1 0 WorldTileSprites_1
+T 60 5 0 WorldTileSprites_1
+T 70 5 0 WorldTileSprites_1
+T 87 10 0 WorldTileSprites_1
+T 69 4 0 WorldTileSprites_1
+T 24 10 0 WorldTileSprites_1
+T 24 0 0 WorldTileSprites_1
+T 24 1 0 WorldTileSprites_1
+T 24 2 0 WorldTileSprites_1
+T 113 10 0 WorldTileSprites_1
+T 34 10 0 WorldTileSprites_1
+E 38 7 Coin
+E 112.5 0 Piranha
+T 100 10 0 WorldTileSprites_1
+T 58 3 0 WorldTileSprites_1
+E 96 0 Goomba
+T 91 10 0 WorldTileSprites_1
+T 51 10 0 WorldTileSprites_1
+T 22 10 0 WorldTileSprites_1
+T 63 10 0 WorldTileSprites_1
+T 105 10 0 WorldTileSprites_1
+T 73 8 0 WorldTileSprites_1
+T 76 9 0 WorldTileSprites_1
+T 89 10 0 WorldTileSprites_1
+T 142 4 0 WorldTileSprites_1
+T 66 9 0 WorldTileSprites_1
+T 83 5 0 WorldTileSprites_1
+T 59 4 0 WorldTileSprites_1
+T 64 8 0 WorldTileSprites_1
+T 32 10 0 WorldTileSprites_1
+T 83 10 0 WorldTileSprites_1
+T 16 10 0 WorldTileSprites_1
+T 60 8 0 WorldTileSprites_1
+T 10 10 0 WorldTileSprites_1
+T 50 10 0 WorldTileSprites_1
+T 131 10 0 WorldTileSprites_1
+T 38 5 0 WorldTileSprites_1
+E 14 1 Goomba
+T 120 2 0 WorldTileSprites_1
+T 6 10 0 WorldTileSprites_1
+T -3 3 0 WorldTileSprites_1
+T 26 10 0 WorldTileSprites_1
+T 120 0 0 WorldTileSprites_1
+T 51 8 0 WorldTileSprites_1
+T 125 10 0 WorldTileSprites_1
+T 14 0 0 WorldTileSprites_1
+T 103 10 0 WorldTileSprites_1
+T 115 -2 0 WorldTileSprites_1
+T 115 -1 0 WorldTileSprites_1
+T 97 10 0 WorldTileSprites_1
+T 43 4 0 WorldTileSprites_1
+T 49 7 0 WorldTileSprites_1
+E 8 3 MysteryBox
+T 41 4 0 WorldTileSprites_1
+T 52 9 0 WorldTileSprites_1
+T 104 -2 0 WorldTileSprites_1
+T 104 -1 0 WorldTileSprites_1
+T 105 -2 0 WorldTileSprites_1
+T 105 -1 0 WorldTileSprites_1
+T 106 -2 0 WorldTileSprites_1
+T 106 -1 0 WorldTileSprites_1
+T 107 -2 0 WorldTileSprites_1
+T 107 -1 0 WorldTileSprites_1
+T 108 -2 0 WorldTileSprites_1
+T 108 -1 0 WorldTileSprites_1
+T 109 -2 0 WorldTileSprites_1
+T 109 -1 0 WorldTileSprites_1
+T 110 -2 0 WorldTileSprites_1
+T 110 -1 0 WorldTileSprites_1
+T 58 8 0 WorldTileSprites_1
+T 78 10 0 WorldTileSprites_1
+T 97 -2 0 WorldTileSprites_1
+T 97 -1 0 WorldTileSprites_1
+T 98 -2 0 WorldTileSprites_1
+T 98 -1 0 WorldTileSprites_1
+T 99 -2 0 WorldTileSprites_1
+T 99 -1 0 WorldTileSprites_1
+T 100 -2 0 WorldTileSprites_1
+T 100 -1 0 WorldTileSprites_1
+T 101 -2 0 WorldTileSprites_1
+T 101 -1 0 WorldTileSprites_1
+T 102 -2 0 WorldTileSprites_1
+T 102 -1 0 WorldTileSprites_1
+T 103 -2 0 WorldTileSprites_1
+T 103 -1 0 WorldTileSprites_1
+T 85 5 0 WorldTileSprites_1
+T -3 7 0 WorldTileSprites_1
+T 85 4 0 WorldTileSprites_1
+T 90 10 0 WorldTileSprites_1
+T 131 0 0 WorldTileSprites_1
+T 131 1 0 WorldTileSprites_1
+E 37 4 Coin
+T 130 0 0 WorldTileSprites_1
+T 49 6 0 WorldTileSprites_1
+E 57 4 Coin
+T 58 9 0 WorldTileSprites_1
+T 15 10 0 WorldTileSprites_1
+T 82 4 0 WorldTileSprites_1
+T 48 10 0 WorldTileSprites_1
+T 96 10 0 WorldTileSprites_1
+E 97.5 0 Goomba
+T 52 1 0 WorldTileSprites_1
+T 55 8 0 WorldTileSprites_1
+T 65 10 0 WorldTileSprites_1
+T 56 10 0 WorldTileSprites_1
+T 134 10 0 WorldTileSprites_1
+T 59 9 0 WorldTileSprites_1
+T 144 4 0 WorldTileSprites_1
+T 114 10 0 WorldTileSprites_1
+T 73 9 0 WorldTileSprites_1
+T 28 10 0 WorldTileSprites_1
+T 143 4 0 WorldTileSprites_1
+T 102 10 0 WorldTileSprites_1
+T 62 10 0 WorldTileSprites_1
+T 49 -2 0 WorldTileSprites_1
+T 49 -1 0 WorldTileSprites_1
+T 50 -2 0 WorldTileSprites_1
+T 50 -1 0 WorldTileSprites_1
+T 51 -2 0 WorldTileSprites_1
+T 51 -1 0 WorldTileSprites_1
+T 52 -2 0 WorldTileSprites_1
+T 52 -1 0 WorldTileSprites_1
+T 53 -2 0 WorldTileSprites_1
+T 53 -1 0 WorldTileSprites_1
+T 54 -2 0 WorldTileSprites_1
+T 54 -1 0 WorldTileSprites_1
+T 55 -2 0 WorldTileSprites_1
+T 55 -1 0 WorldTileSprites_1
+T 57 8 0 WorldTileSprites_1
+T 66 3 0 WorldTileSprites_1
+E 66 4 MysteryBoxMushroom
+T 84 4 0 WorldTileSprites_1
+T 36 5 0 WorldTileSprites_1
+T 8 10 0 WorldTileSprites_1
+T 119 1 0 WorldTileSprites_1
+T 36 3 0 WorldTileSprites_1
+T 104 10 0 WorldTileSprites_1
+T 47 10 0 WorldTileSprites_1
+T 56 8 0 WorldTileSprites_1
+E 13 0 Goomba
+T 59 6 0 WorldTileSprites_1
+T 119 0 0 WorldTileSprites_1
+E 9 3 MysteryBox
+T 39 10 0 WorldTileSprites_1
+E 43 5 MysteryBox
+T 54 10 0 WorldTileSprites_1
+T 120 -2 0 WorldTileSprites_1
+T 120 -1 0 WorldTileSprites_1
+T 119 -2 0 WorldTileSprites_1
+T 119 -1 0 WorldTileSprites_1
+T 112 0 0 WorldTileSprites_18
+T 112 1 0 WorldTileSprites_5
+T 113 0 0 WorldTileSprites_19
+T 113 1 0 WorldTileSprites_6
+T 20 10 0 WorldTileSprites_1
+T 81 4 0 WorldTileSprites_1
+T 42 10 0 WorldTileSprites_1
+T 63 9 0 WorldTileSprites_1
+T 121 10 0 WorldTileSprites_1
+T 25 10 0 WorldTileSprites_1
+E 85 7 Coin
+T 63 -2 0 WorldTileSprites_1
+T 63 -1 0 WorldTileSprites_1
+T 64 -2 0 WorldTileSprites_1
+T 64 -1 0 WorldTileSprites_1
+T 65 -2 0 WorldTileSprites_1
+T 65 -1 0 WorldTileSprites_1
+T 66 -2 0 WorldTileSprites_1
+T 66 -1 0 WorldTileSprites_1
+T 67 -2 0 WorldTileSprites_1
+T 67 -1 0 WorldTileSprites_1
+T 68 -2 0 WorldTileSprites_1
+T 68 -1 0 WorldTileSprites_1
+T 69 -2 0 WorldTileSprites_1
+T 69 -1 0 WorldTileSprites_1
+E 86 7 Coin
+E 143 0.25 Koopa
+T 115 10 0 WorldTileSprites_1
+T 28 0 0 WorldTileSprites_1
+T 28 1 0 WorldTileSprites_1
+T 28 2 0 WorldTileSprites_1
+T 19 10 0 WorldTileSprites_1
+E 65 4 Coin
+T 109 10 0 WorldTileSprites_1
+T 110 10 0 WorldTileSprites_1
+T 72 10 0 WorldTileSprites_1
+T 55 10 0 WorldTileSprites_1
+T 108 10 0 WorldTileSprites_1
+T 93 10 0 WorldTileSprites_1
+T -3 2 0 WorldTileSprites_1
+T 69 -2 0 WorldTileSprites_1
+T 69 -1 0 WorldTileSprites_1
+T 70 -2 0 WorldTileSprites_1
+T 70 -1 0 WorldTileSprites_1
+T 71 -2 0 WorldTileSprites_1
+T 71 -1 0 WorldTileSprites_1
+T 72 -2 0 WorldTileSprites_1
+T 72 -1 0 WorldTileSprites_1
+T 73 -2 0 WorldTileSprites_1
+T 73 -1 0 WorldTileSprites_1
+T -3 8 0 WorldTileSprites_1
+E 147 4 MysteryBoxMushroom
+T 75 10 0 WorldTileSprites_1
+T 27 10 0 WorldTileSprites_1
+T 65 3 0 WorldTileSprites_1
+T 65 9 0 WorldTileSprites_1
+E 82 7 Coin
+T 74 -2 0 WorldTileSprites_1
+T 74 -1 0 WorldTileSprites_1
+T 75 -2 0 WorldTileSprites_1
+T 75 -1 0 WorldTileSprites_1
+T 76 -2 0 WorldTileSprites_1
+T 76 -1 0 WorldTileSprites_1
+T 77 -2 0 WorldTileSprites_1
+T 77 -1 0 WorldTileSprites_1
+T 78 -2 0 WorldTileSprites_1
+T 78 -1 0 WorldTileSprites_1
+T 133 10 0 WorldTileSprites_1
+T -3 1 0 WorldTileSprites_1
+T 17 10 0 WorldTileSprites_1
+T 76 10 0 WorldTileSprites_1
+T 128 10 0 WorldTileSprites_1
+E 83 7 Coin
+T 0 -2 0 WorldTileSprites_1
+T 0 -1 0 WorldTileSprites_1
+T 1 -2 0 WorldTileSprites_1
+T 1 -1 0 WorldTileSprites_1
+T 2 -2 0 WorldTileSprites_1
+T 2 -1 0 WorldTileSprites_1
+T 3 -2 0 WorldTileSprites_1
+T 3 -1 0 WorldTileSprites_1
+T 4 -2 0 WorldTileSprites_1
+T 4 -1 0 WorldTileSprites_1
+T 5 -2 0 WorldTileSprites_1
+T 5 -1 0 WorldTileSprites_1
+T 6 -2 0 WorldTileSprites_1
+T 6 -1 0 WorldTileSprites_1
+T 50 7 0 WorldTileSprites_1
+T 95 10 0 WorldTileSprites_1
+T 73 10 0 WorldTileSprites_1
+T 11 10 0 WorldTileSprites_1
+T 69 3 0 WorldTileSprites_1
+E 73 4 Goomba
+T 112 10 0 WorldTileSprites_1
+T 18 0 0 WorldTileSprites_1
+T 18 1 0 WorldTileSprites_1
+T 18 2 0 WorldTileSprites_1
+T 71 10 0 WorldTileSprites_1
+T 57 9 0 WorldTileSprites_1
+T 43 3 0 WorldTileSprites_1
+T 75 8 0 WorldTileSprites_1
+T 42 3 0 WorldTileSprites_1
+E 40 7 Coin
+T -3 4 0 WorldTileSprites_1
+T 59 10 0 WorldTileSprites_1
+T 41 3 0 WorldTileSprites_1
+T 111 -2 0 WorldTileSprites_1
+T 111 -1 0 WorldTileSprites_1
+T 112 -2 0 WorldTileSprites_1
+T 112 -1 0 WorldTileSprites_1
+T 113 -2 0 WorldTileSprites_1
+T 113 -1 0 WorldTileSprites_1
+T 114 -2 0 WorldTileSprites_1
+T 114 -1 0 WorldTileSprites_1
+T 115 -2 0 WorldTileSprites_1
+T 115 -1 0 WorldTileSprites_1
+T 116 -2 0 WorldTileSprites_1
+T 116 -1 0 WorldTileSprites_1
+T 117 -2 0 WorldTileSprites_1
+T 117 -1 0 WorldTileSprites_1
+T 55 3 0 WorldTileSprites_1
+T 67 10 0 WorldTileSprites_1
+T 69 5 0 WorldTileSprites_1
+T 81 5 0 WorldTileSprites_1
+T 30 0 0 WorldTileSprites_1
+T 30 1 0 WorldTileSprites_1
+T 129 10 0 WorldTileSprites_1
+T 33 10 0 WorldTileSprites_1
+T -3 9 0 WorldTileSprites_1
+E 42 4 Coin
+T 36 4 0 WorldTileSprites_1
+T 82 5 0 WorldTileSprites_1
+T 39 5 0 WorldTileSprites_1
+T 7 -2 0 WorldTileSprites_1
+T 7 -1 0 WorldTileSprites_1
+T 8 -2 0 WorldTileSprites_1
+T 8 -1 0 WorldTileSprites_1
+T 9 -2 0 WorldTileSprites_1
+T 9 -1 0 WorldTileSprites_1
+T 10 -2 0 WorldTileSprites_1
+T 10 -1 0 WorldTileSprites_1
+T 11 -2 0 WorldTileSprites_1
+T 11 -1 0 WorldTileSprites_1
+T 12 -2 0 WorldTileSprites_1
+T 12 -1 0 WorldTileSprites_1
+T 13 -2 0 WorldTileSprites_1
+T 13 -1 0 WorldTileSprites_1
+E 55 4 Coin
+# （原版这里有一个 Spawn Point @ (0,9)：那是"从 1-1 的出口管落进地下段"的落点。
+#  本工程 1-1→1-2 的过场没有做"从上落下"这一段（那 9 格高处也没有对应的入口管贴图），
+#  所以**不启用**这一行 —— 仍按"关卡最左 + 3.5 格、站在地面顶"进入。
+#  要启用时把它写成 `# spawn 0 9` 并把入口管的贴图补上，同时把 1-1 通关的过场改成落管。）
+T 145 -2 0 WorldTileSprites_1
+T 145 -1 0 WorldTileSprites_1
+T 145 4 0 WorldTileSprites_1
+T 146 -2 0 WorldTileSprites_1
+T 146 -1 0 WorldTileSprites_1
+T 146 4 0 WorldTileSprites_1
+T 147 -2 0 WorldTileSprites_1
+T 147 -1 0 WorldTileSprites_1
+T 148 -2 0 WorldTileSprites_1
+T 148 -1 0 WorldTileSprites_1
+T 149 -2 0 WorldTileSprites_1
+T 149 -1 0 WorldTileSprites_1
+T 150 -2 0 WorldTileSprites_1
+T 150 -1 0 WorldTileSprites_1
+T 151 -2 0 WorldTileSprites_1
+T 151 -1 0 WorldTileSprites_1
+T 157 0 0 WorldTileSprites_1
+T 157 1 0 WorldTileSprites_1
+T 157 2 0 WorldTileSprites_1
+T 158 0 0 WorldTileSprites_1
+T 158 1 0 WorldTileSprites_1
+T 158 2 0 WorldTileSprites_1
+T 158 10 0 WorldTileSprites_1
+T 159 0 0 WorldTileSprites_1
+T 159 1 0 WorldTileSprites_1
+T 159 2 0 WorldTileSprites_1
+T 159 10 0 WorldTileSprites_1
+T 160 -2 0 WorldTileSprites_1
+T 160 -1 0 WorldTileSprites_1
+T 160 0 0 WorldTileSprites_1
+T 160 1 0 WorldTileSprites_1
+T 160 2 0 WorldTileSprites_1
+T 160 10 0 WorldTileSprites_1
+T 161 -2 0 WorldTileSprites_1
+T 161 -1 0 WorldTileSprites_1
+T 161 0 0 WorldTileSprites_1
+T 161 1 0 WorldTileSprites_1
+T 161 2 0 WorldTileSprites_1
+T 161 10 0 WorldTileSprites_1
+T 162 -2 0 WorldTileSprites_1
+T 162 -1 0 WorldTileSprites_1
+T 162 0 0 WorldTileSprites_1
+T 162 1 0 WorldTileSprites_1
+T 162 2 0 WorldTileSprites_1
+T 162 10 0 WorldTileSprites_1
+T 163 -2 0 WorldTileSprites_1
+T 163 -1 0 WorldTileSprites_1
+T 163 0 0 WorldTileSprites_1
+T 163 1 0 WorldTileSprites_1
+T 163 2 0 WorldTileSprites_1
+T 163 3 0 WorldTileSprites_44
+T 163 4 0 WorldTileSprites_31
+T 163 10 0 WorldTileSprites_1
+T 164 -2 0 WorldTileSprites_1
+T 164 -1 0 WorldTileSprites_1
+T 164 0 0 WorldTileSprites_1
+T 164 1 0 WorldTileSprites_1
+T 164 2 0 WorldTileSprites_1
+T 164 3 0 WorldTileSprites_45
+T 164 4 0 WorldTileSprites_32
+T 164 10 0 WorldTileSprites_1
+T 165 -2 0 WorldTileSprites_1
+T 165 -1 0 WorldTileSprites_1
+T 165 0 0 WorldTileSprites_1
+T 165 1 0 WorldTileSprites_1
+T 165 2 0 WorldTileSprites_1
+T 165 3 0 WorldTileSprites_70
+T 165 4 0 WorldTileSprites_57
+T 165 5 0 WorldTileSprites_18
+T 165 6 0 WorldTileSprites_18
+T 165 7 0 WorldTileSprites_18
+T 165 8 0 WorldTileSprites_18
+T 165 9 0 WorldTileSprites_18
+T 165 10 0 WorldTileSprites_18
+T 166 -2 0 WorldTileSprites_1
+T 166 -1 0 WorldTileSprites_1
+T 166 0 0 WorldTileSprites_1
+T 166 1 0 WorldTileSprites_1
+T 166 2 0 WorldTileSprites_1
+T 166 3 0 WorldTileSprites_71
+T 166 4 0 WorldTileSprites_58
+T 166 5 0 WorldTileSprites_19
+T 166 6 0 WorldTileSprites_19
+T 166 7 0 WorldTileSprites_19
+T 166 8 0 WorldTileSprites_19
+T 166 9 0 WorldTileSprites_19
+T 166 10 0 WorldTileSprites_19
+T 167 -2 0 WorldTileSprites_1
+T 167 -1 0 WorldTileSprites_1
+T 167 0 0 WorldTileSprites_1
+T 167 1 0 WorldTileSprites_1
+T 167 2 0 WorldTileSprites_1
+T 167 3 0 WorldTileSprites_1
+T 167 4 0 WorldTileSprites_1
+T 167 5 0 WorldTileSprites_1
+T 167 6 0 WorldTileSprites_1
+T 167 7 0 WorldTileSprites_1
+T 167 8 0 WorldTileSprites_1
+T 167 9 0 WorldTileSprites_1
+T 167 10 0 WorldTileSprites_1
+T 168 -2 0 WorldTileSprites_1
+T 168 -1 0 WorldTileSprites_1
+T 168 0 0 WorldTileSprites_1
+T 168 1 0 WorldTileSprites_1
+T 168 2 0 WorldTileSprites_1
+T 168 3 0 WorldTileSprites_1
+T 168 4 0 WorldTileSprites_1
+T 168 5 0 WorldTileSprites_1
+T 168 6 0 WorldTileSprites_1
+T 168 7 0 WorldTileSprites_1
+T 168 8 0 WorldTileSprites_1
+T 168 9 0 WorldTileSprites_1
+T 168 10 0 WorldTileSprites_1
+T 169 -2 0 WorldTileSprites_1
+T 169 -1 0 WorldTileSprites_1
+T 169 0 0 WorldTileSprites_1
+T 169 1 0 WorldTileSprites_1
+T 169 2 0 WorldTileSprites_1
+T 169 3 0 WorldTileSprites_1
+T 169 4 0 WorldTileSprites_1
+T 169 5 0 WorldTileSprites_1
+T 169 6 0 WorldTileSprites_1
+T 169 7 0 WorldTileSprites_1
+T 169 8 0 WorldTileSprites_1
+T 169 9 0 WorldTileSprites_1
+T 169 10 0 WorldTileSprites_1
+T 170 -2 0 WorldTileSprites_1
+T 170 -1 0 WorldTileSprites_1
+T 170 0 0 WorldTileSprites_1
+T 170 1 0 WorldTileSprites_1
+T 170 2 0 WorldTileSprites_1
+T 170 3 0 WorldTileSprites_1
+T 170 4 0 WorldTileSprites_1
+T 170 5 0 WorldTileSprites_1
+T 170 6 0 WorldTileSprites_1
+T 170 7 0 WorldTileSprites_1
+T 170 8 0 WorldTileSprites_1
+T 170 9 0 WorldTileSprites_1
+T 170 10 0 WorldTileSprites_1
+T 171 -2 0 WorldTileSprites_1
+T 171 -1 0 WorldTileSprites_1
+T 171 0 0 WorldTileSprites_1
+T 171 1 0 WorldTileSprites_1
+T 171 2 0 WorldTileSprites_1
+T 171 3 0 WorldTileSprites_1
+T 171 4 0 WorldTileSprites_1
+T 171 5 0 WorldTileSprites_1
+T 171 6 0 WorldTileSprites_1
+T 171 7 0 WorldTileSprites_1
+T 171 8 0 WorldTileSprites_1
+T 171 9 0 WorldTileSprites_1
+T 171 10 0 WorldTileSprites_1
+T 172 -2 0 WorldTileSprites_1
+T 172 -1 0 WorldTileSprites_1
+T 172 0 0 WorldTileSprites_1
+T 172 1 0 WorldTileSprites_1
+T 172 2 0 WorldTileSprites_1
+T 172 3 0 WorldTileSprites_1
+T 172 4 0 WorldTileSprites_1
+T 172 5 0 WorldTileSprites_1
+T 172 6 0 WorldTileSprites_1
+T 172 7 0 WorldTileSprites_1
+T 172 8 0 WorldTileSprites_1
+T 172 9 0 WorldTileSprites_1
+T 172 10 0 WorldTileSprites_1
+T 173 -2 0 WorldTileSprites_1
+T 173 -1 0 WorldTileSprites_1
+T 173 0 0 WorldTileSprites_1
+T 173 1 0 WorldTileSprites_1
+T 173 2 0 WorldTileSprites_1
+T 173 3 0 WorldTileSprites_1
+T 173 4 0 WorldTileSprites_1
+T 173 5 0 WorldTileSprites_1
+T 173 6 0 WorldTileSprites_1
+T 173 7 0 WorldTileSprites_1
+T 173 8 0 WorldTileSprites_1
+T 173 9 0 WorldTileSprites_1
+T 173 10 0 WorldTileSprites_1
+T 174 -2 0 WorldTileSprites_1
+T 174 -1 0 WorldTileSprites_1
+T 174 10 0 WorldTileSprites_1
+T 175 -2 0 WorldTileSprites_1
+T 175 -1 0 WorldTileSprites_1
+T 175 10 0 WorldTileSprites_1
+T 176 -2 0 WorldTileSprites_1
+T 176 -1 0 WorldTileSprites_1
+T 176 10 0 WorldTileSprites_1
+T 177 -2 0 WorldTileSprites_1
+T 177 -1 0 WorldTileSprites_1
+T 177 10 0 WorldTileSprites_1
+T 178 -2 0 WorldTileSprites_1
+T 178 -1 0 WorldTileSprites_1
+T 178 10 0 WorldTileSprites_1
+T 179 -2 0 WorldTileSprites_1
+T 179 -1 0 WorldTileSprites_1
+T 179 10 0 WorldTileSprites_1
+T 180 -2 0 WorldTileSprites_1
+T 180 -1 0 WorldTileSprites_1
+T 180 10 0 WorldTileSprites_1
+T 181 -2 0 WorldTileSprites_1
+T 181 -1 0 WorldTileSprites_1
+T 181 10 0 WorldTileSprites_1
+T 182 -2 0 WorldTileSprites_1
+T 182 -1 0 WorldTileSprites_1
+T 182 10 0 WorldTileSprites_1
+T 183 -2 0 WorldTileSprites_1
+T 183 -1 0 WorldTileSprites_1
+T 183 10 0 WorldTileSprites_1
+T 184 -2 0 WorldTileSprites_1
+T 184 -1 0 WorldTileSprites_1
+T 184 10 0 WorldTileSprites_1
+T 185 -2 0 WorldTileSprites_1
+T 185 -1 0 WorldTileSprites_1
+T 186 -2 0 WorldTileSprites_1
+T 186 -1 0 WorldTileSprites_1
+T 187 -2 0 WorldTileSprites_1
+T 187 -1 0 WorldTileSprites_1
+T 188 -2 0 WorldTileSprites_1
+T 188 -1 0 WorldTileSprites_1
+T 188 0 0 WorldTileSprites_1
+T 188 1 0 WorldTileSprites_1
+T 188 2 0 WorldTileSprites_1
+T 188 3 0 WorldTileSprites_1
+T 188 4 0 WorldTileSprites_1
+T 188 5 0 WorldTileSprites_1
+T 188 6 0 WorldTileSprites_1
+T 188 7 0 WorldTileSprites_1
+T 188 8 0 WorldTileSprites_1
+T 188 9 0 WorldTileSprites_1
+T 188 10 0 WorldTileSprites_1
+T 189 -2 0 WorldTileSprites_1
+T 189 -1 0 WorldTileSprites_1
+T 189 0 0 WorldTileSprites_1
+T 189 1 0 WorldTileSprites_1
+T 189 2 0 WorldTileSprites_1
+T 189 3 0 WorldTileSprites_1
+T 189 4 0 WorldTileSprites_1
+T 189 5 0 WorldTileSprites_1
+T 189 6 0 WorldTileSprites_1
+T 189 7 0 WorldTileSprites_1
+T 189 8 0 WorldTileSprites_1
+T 189 9 0 WorldTileSprites_1
+T 189 10 0 WorldTileSprites_1
+T 190 -2 0 WorldTileSprites_1
+T 190 -1 0 WorldTileSprites_1
+T 191 -2 0 WorldTileSprites_1
+T 191 -1 0 WorldTileSprites_1
