@@ -125,7 +125,12 @@ namespace SuperMario.UI
 
         private void OnDestroy()
         {
-            if (_subscribed) Game.Event.Off(Events.HudDirty, Refresh);
+            // ⛔ 退出 / 编辑器停止播放时必须判空：销毁顺序是
+            //   EngineRunner.OnApplicationQuit → Game.Shutdown()（把 Event 门面置为 null）
+            //   → Unity 才销毁本面板 → 这里再解引用就是 NullReferenceException。
+            //   此时事件总线已被 Shutdown 的 Event.OffAll() 清空，不解绑也不会残留订阅。
+            //   （同族写法见 clover-project-diablo2 各面板的 Subscribe/Unsubscribe 判空。）
+            if (_subscribed && Game.Event != null) Game.Event.Off(Events.HudDirty, Refresh);
         }
 
         private void Refresh()
