@@ -1,4 +1,4 @@
-﻿# One-off driver (deleted after use, skill 1.8): make sure Play is up with the engine alive, then run one
+# One-off driver (deleted after use, skill 1.8): make sure Play is up with the engine alive, then run one
 # or more probe scenes in the SAME Play session and wait for each scene's done marker.
 # ASCII-only on purpose: PS 5.1 parses a BOM-less .ps1 as ANSI, so CJK literals silently break -match.
 param(
@@ -6,8 +6,8 @@ param(
     [int]$TimeoutSec = 200
 )
 $ErrorActionPreference = 'Continue'
-$client = 'C:\Work\Server\full-dev\clover-project-super-mario\client'
-$probe  = 'C:\Work\Server\full-dev\clover-project-super-mario\tools\probes\probe.cs'
+$client = 'client'
+$probe  = 'tools\probes\probe.cs'
 # Take the log for TODAY (the game writes <yyyy-MM-dd>.log). A hard-coded date keeps reading
 # yesterday's file the next day => the fresh markers are never seen => every scene burns its
 # whole timeout doing nothing. So: newest yyyy-MM-dd.log in Logs.

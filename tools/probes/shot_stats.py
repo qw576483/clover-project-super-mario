@@ -9,7 +9,7 @@ import io, os, re, sys
 import numpy as np
 from PIL import Image
 
-ROOT = r"c:/Work/Server/full-dev/clover-project-super-mario"
+ROOT = r"clover-project-super-mario"
 SHOTS = os.path.join(ROOT, "client", "Assets", "Screenshots")
 OUT = os.path.join(ROOT, ".ai-tmp/test/shot_stats.out.txt")
 GREEN = np.array([28, 132, 20])       # 我方装饰绿（山/灌木）

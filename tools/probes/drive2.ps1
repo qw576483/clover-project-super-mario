@@ -1,4 +1,4 @@
-﻿# One-off driver (deleted after use, skill 1.8): enter Play ONCE, then run several probe scenes in the
+# One-off driver (deleted after use, skill 1.8): enter Play ONCE, then run several probe scenes in the
 # SAME Play session, waiting for each scene's own done marker. Same idea as the older run.ps1 but with
 # two fixes that the older scripts got wrong:
 #   1) every `unity` call carries --project-path: two editors are open on this machine
@@ -16,8 +16,8 @@ param(
     [switch]$ReusePlay
 )
 $ErrorActionPreference = 'Continue'
-$proj  = 'C:\Work\Server\full-dev\clover-project-super-mario\client'
-$probe = 'C:\Work\Server\full-dev\clover-project-super-mario\tools\probes\probe.cs'
+$proj  = 'client'
+$probe = 'tools\probes\probe.cs'
 $log   = Join-Path $proj ('Logs\' + (Get-Date -Format 'yyyy-MM-dd') + '.log')
 $menuMark  = ([char]0x2192) + ' Menu'                                                    # "-> Menu"
 $doneMark  = ([char[]]@(0x573A,0x666F,0x7ED3,0x675F,0xFF1A) -join '')                    # "scene end:"

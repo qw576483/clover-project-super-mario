@@ -25,7 +25,7 @@ namespace SuperMario.Tests
     /// </summary>
     public sealed class SmokeTests
     {
-        private const string ShotDir = "C:/Work/Server/full-dev/_smb_work/shots";
+        private const string ShotDir = "_smb_work/shots";
 
         [UnityTest]
         [Timeout(180000)]

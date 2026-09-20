@@ -9,7 +9,7 @@ import re
 import sys
 
 sys.stdout.reconfigure(encoding='utf-8')
-ROOT = r"c:/Work/Server/full-dev/clover-project-super-mario"
+ROOT = r"clover-project-super-mario"
 P = os.path.join(ROOT, u'策划', u'验收表.md')
 DROP = {u'E-4', u'E-9', u'E-13', u'E-15', u'E-16'}
 

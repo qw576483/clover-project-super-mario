@@ -10,8 +10,8 @@ TEXT = "by clover-engine"
 SIZE = 16.0
 
 FONTS = {
-    "OLD uppercase-only": r"c:\Work\Server\full-dev\clover-project-super-mario\client\Assets\Resources\Fonts\SuperMarioNES.ttf",
-    "NEW prstart (clone)": r"c:\Work\Server\full-dev\clover-project-super-mario\原版资源\参考工程\SMB-clone\Assets\Fonts\prstart.ttf",
+    "OLD uppercase-only": r"client\Assets\Resources\Fonts\SuperMarioNES.ttf",
+    "NEW prstart (clone)": r"原版资源\参考工程\SMB-clone\Assets\Fonts\prstart.ttf",
 }
 
 for label, path in FONTS.items():

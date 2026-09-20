@@ -1,4 +1,4 @@
-﻿# One-off driver (deleted after use, skill 1.8). Same idea as run.ps1 but gives EVERY scene its own
+# One-off driver (deleted after use, skill 1.8). Same idea as run.ps1 but gives EVERY scene its own
 # fresh Play session: a scene that ends in Result / GameOver / Boot leaves the FSM in a state where the
 # next scene's "BackToMain -> Menu" never lands, which silently produced blank (single-colour) frames.
 # ASCII-only on purpose (PS 5.1 parses a BOM-less .ps1 as ANSI, so CJK literals silently break -match).
@@ -8,8 +8,8 @@ param(
     [int]$PlayWaitSec = 45
 )
 $ErrorActionPreference = 'Continue'
-$client = 'C:\Work\Server\full-dev\clover-project-super-mario\client'
-$probe  = 'C:\Work\Server\full-dev\clover-project-super-mario\tools\probes\probe.cs'
+$client = 'client'
+$probe  = 'tools\probes\probe.cs'
 # NOTE: take the log of the CURRENT day - after midnight the file name changes and the old
 # one is never appended to again (measured: every scene then "times out" while actually running).
 $log    = Join-Path $client ('Logs\' + (Get-Date -Format 'yyyy-MM-dd') + '.log')

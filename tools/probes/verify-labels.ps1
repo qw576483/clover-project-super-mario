@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
 # One-off harness (round 4): every check LABEL in the template skeleton must be ASCII, and every label
 # the prose cites must exist in the code. Deleted after use.
-$repo = 'C:\Work\Server\full-dev\clover-tools\ai-skill'
+$repo = 'clover-tools\ai-skill'
 $inst = 'C:\Users\xuanyuan\.codebuddy\skills\ai-skill'
-$proj = 'C:\Work\Server\full-dev\clover-project-super-mario'
+$proj = 'clover-project-super-mario'
 $fail = 0
 function V($ok, $name, $detail) {
   if ($ok) { Write-Output ("PASS  {0,-30} {1}" -f $name, $detail) }

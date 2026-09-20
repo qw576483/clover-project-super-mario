@@ -7,7 +7,7 @@
 #   run 2  intro_card.png aged 2s past its own dep  -> expect: exactly that row flagged (red)
 #   run 3  mtime restored                           -> expect: green again
 # ASCII-only on purpose (PS 5.1 parses a BOM-less .ps1 as ANSI).
-param([string]$Root = 'c:/Work/Server/full-dev/clover-project-super-mario')
+param([string]$Root = 'clover-project-super-mario')
 $ErrorActionPreference = 'Stop'
 $verify = Join-Path $Root 'tools/verify.ps1'
 $shot = Join-Path $Root 'client\Assets\Screenshots\intro_card.png'

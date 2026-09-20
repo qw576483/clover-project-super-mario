@@ -23,7 +23,7 @@ namespace SuperMario.EditorTools
     /// </summary>
     public static class SmokeScreenshots
     {
-        private const string OutDir = "C:/Work/Server/full-dev/_smb_work/shots";
+        private const string OutDir = "_smb_work/shots";
 
         private static int _step;
         private static float _phaseEntered;
