@@ -372,7 +372,7 @@ namespace SuperMario.Module.Flow
             // 恢复成 1 —— 也就是 `→ Stage`（原版世界真正开始跑的那一帧）才恢复。
             //
             // ⚠️ 冻住之后 `Time.time` / `Time.deltaTime` **都不再前进**，所以本状态里所有的等待
-            // 都必须走 unscaled 口径（引擎 E1 的教训：`timeScale = 0` 时普通 `Timer.After` 永不触发）。
+            // 都必须走 unscaled 口径（引擎 Timer 的教训：`timeScale = 0` 时普通 `Timer.After` 永不触发）。
             Time.timeScale = 0f;
             _loadingStart = Time.unscaledTime;
             // 给这一次 Loading 发一个号：看门狗拿它认"我等的还是不是我那一次"（见下面注册处）。
@@ -1103,8 +1103,8 @@ namespace SuperMario.Module.Flow
             // 普通 After 排出来的回调【永不执行】，画面就永久停在 GameOver
             // （实测卡了 30 秒以上、一条日志都没有）。
             // 引擎已为此补了不受 timeScale 影响的 AfterUnscaled。
-            // 修复过程与精度边界见【引擎仓库】的 clover-client-unity-engine/修复记录.md（E1）——
-            // 引擎改动影响所有项目，所以记录跟着引擎走，不放业务项目里。
+            // 修复过程与精度边界见引擎件 `Runtime/Core/Timer.cs` 的 `AfterUnscaled` 注释 ——
+            // 引擎改动影响所有项目，所以说明跟着**引擎代码**走，不放业务项目里。
             Game.Timer.AfterUnscaled(GameOverStaySeconds, () =>
             {
                 Time.timeScale = 1f;

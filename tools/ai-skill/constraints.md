@@ -1,8 +1,8 @@
 # 本项目约束与踩坑（只记本项目特有的）
 
-> ⚠️ **本文件【不放引擎修复记录】**。引擎改动影响所有项目，记录在**引擎仓库**：
-> `clover-client-unity-engine/修复记录.md`（E 编号 + 最小复现 + 自证）。
-> 这里只记"本项目自己踩的坑"，以及"本项目依赖了哪个 E 修复"。
+> ⚠️ **本文件【不放引擎修复的根因分析】**。引擎改动影响所有项目，说明放在**引擎代码注释**里
+> （受影响的那个文件：根因 / 最小复现 / 自证 / 边界都在注释里）。
+> 这里只记"本项目自己踩的坑"，以及"本项目依赖了哪一处引擎修复"（写 `文件:方法`）。
 
 ---
 
@@ -53,10 +53,10 @@
 
 ---
 
-## 本项目依赖的引擎修复（E 编号）
+## 本项目依赖的引擎修复
 
-| E | 内容 | 本项目受影响处 |
+| 引擎件（可达落点） | 内容 | 本项目受影响处 |
 |---|---|---|
-| **E1** | `Timer` 在 `timeScale = 0` 时永不触发 ⇒ 新增 `ITimer.AfterUnscaled` / `EveryUnscaled` | `AppFlow.EnterGameOver` 的"4 秒后回标题"必须用 `AfterUnscaled`（原来用普通 `After` ⇒ GameOver 屏永久卡死） |
+| `Runtime/Core/Timer.cs` 的 `AfterUnscaled` / `EveryUnscaled` | `Timer` 在 `timeScale = 0` 时永不触发 ⇒ 引擎补了不受 timeScale 影响的定时器 | `AppFlow.EnterGameOver` 的"4 秒后回标题"必须用 `AfterUnscaled`（原来用普通 `After` ⇒ GameOver 屏永久卡死） |
 
-细节见引擎仓库 `修复记录.md`。
+细节见引擎件 `Runtime/Core/Timer.cs` 的注释（根因 / 最小复现 / 自证 / 边界都在那里）。
