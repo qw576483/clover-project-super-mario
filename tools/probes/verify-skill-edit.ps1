@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 # One-off harness: checks whether the skill edit is correct. Lives in .ai-tmp/test and is deleted after use.
 # Round 3. Round 1's 4 FAIL were harness bugs; round 2's single FAIL (V10) was real: the template and the
 # shipped project gate had drifted (check label + a hidden dependency on another check's variable). Both fixed.
-$repo = 'clover-tools\ai-skill'
+$repo = 'clover-ai-skill'
 # Host install copy: derived from the user profile, never a hard-coded user name.
 $inst = Join-Path $env:USERPROFILE '.codebuddy\skills\ai-skill'
 $proj = 'clover-project-super-mario'
