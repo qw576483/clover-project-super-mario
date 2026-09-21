@@ -766,6 +766,18 @@ if ($noCell.Count -gt 0) {
   Say 'PASS' 'evidence-economy' "all $($visRowEv.Count) visual row(s) resolve to a contact-sheet cell; new png since round start = $($newShots.Count) / cap $cap; no scene captured >= 3 times in this piece"
 }
 
+# 26) no forensic screenshots inside client/Assets (SKILL.md 1.8 item 6; template item 26).
+#     Narrow scope on purpose: "any png under client/Assets" would be a FALSE RED (each project
+#     carries a legitimate art png there). Only the capture directory is a violation.
+$assetDir  = Join-Path $root 'client\Assets'
+$shotInAsm = Join-Path $assetDir 'Screenshots'
+if (Test-Path $shotInAsm) {
+  $n = @(Get-ChildItem $shotInAsm -Recurse -Filter *.png -File -ErrorAction SilentlyContinue).Count
+  $fail++; Say 'FAIL' 'no-assets-screenshots' ("client/Assets/Screenshots exists (" + $n + " png) -- captures belong in .ai-tmp/screenshots, delete before delivery (1.8)")
+} else {
+  Say 'PASS' 'no-assets-screenshots' 'no forensic screenshot dir under client/Assets'
+}
+
 Write-Output ''
 Write-Output "===== summary: FAIL=$fail  HUMAN-ONLY=$human ====="
 if ($fail -gt 0) { Write-Output 'FAIL present => the words "done / delivered / verified" are forbidden' }
