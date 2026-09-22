@@ -448,16 +448,36 @@ $specDocs = @(Get-ChildItem $caseDir -Filter *.md -File -ErrorAction SilentlyCon
 if ($specDocs.Count -gt 0) { Say 'PASS' 'spec-doc' "$($specDocs.Count) file(s) in ce-hua-an" }
 else { $fail++; Say 'FAIL' 'spec-doc-missing' 'gate 0 requires the form/scope doc under ce-hua-an' }
 
-# 12) no *recent* async team-member sessions: that channel bypasses model:inherit, so the executor
-#     would run on the default (auto) model instead of the main agent's model.
-#     Scoped to a time window on purpose -- stale leftovers from earlier work must not raise a
-#     false positive (a check that cries wolf is worse than no check).
-$wsRoot = Split-Path $root -Parent
+# 12) no-sync-subagents (was `no-team-sessions`; POLICY REVERSED 2026-09-22):
+#     dispatch goes ONLY through team members (async: subagent_name + name + team_name).
+#     The SYNC channel stalls (code=10003 This operation was aborted / No result found)
+#     and leaves the caller no report, so the channel form is part of the contract.
+#     The old check had this INVERTED -- it failed on the team form, which is now required.
+#     The model is NOT checkable here (a member's model string is an injected
+#     self-description it cannot verify; measured 2026-09-22), and a sync dispatch leaves
+#     no product-side trace either. What IS checkable is the LEDGER: every dispatch row
+#     must name a team/member.
+$wsRoot  = Split-Path $root -Parent
 $teamCut = (Get-Date).AddHours(-24)
-$teams = @(Get-ChildItem (Join-Path $wsRoot '.codebuddy\teams') -Directory -ErrorAction SilentlyContinue |
-           Where-Object { $_.LastWriteTime -gt $teamCut })
-if ($teams.Count -eq 0) { Say 'PASS' 'no-team-sessions' 'no async team session active within 24h' }
-else { $fail++; Say 'FAIL' 'no-team-sessions' "$($teams.Count) session(s) active within 24h: $($teams.Name -join ', ') (executors must be plain sub-agents = same model as main agent)" }
+$teams   = @(Get-ChildItem (Join-Path $wsRoot '.codebuddy\teams') -Directory -ErrorAction SilentlyContinue |
+             Where-Object { $_.LastWriteTime -gt $teamCut })
+$dLog  = Join-Path $root '.ai-tmp/test/dispatch-log.tsv'
+$dRows = @()
+if (Test-Path $dLog) {
+  foreach ($line in @([System.IO.File]::ReadAllLines($dLog, [System.Text.Encoding]::UTF8))) {
+    if ($line -match '^\s*#' -or $line.Trim().Length -eq 0) { continue }
+    $dRows += $line
+  }
+}
+$noTeam = @($dRows | Where-Object { $_ -notmatch '(?i)\b(teams?|members?)\b' })
+if ($dRows.Count -eq 0) {
+  Say 'PASS' 'no-sync-subagents' ("no dispatch in this window; in-window team dir(s) = " + $teams.Count)
+} elseif ($noTeam.Count -gt 0) {
+  $fail++
+  Say 'FAIL' 'no-sync-subagents' ('' + $noTeam.Count + ' dispatch row(s) name no team/member => those went out over the SYNC channel (stalls: code=10003)')
+} else {
+  Say 'PASS' 'no-sync-subagents' ('all ' + $dRows.Count + ' dispatch row(s) name a team member; in-window team dir(s) = ' + $teams.Count)
+}
 
 # 13) project artifacts must not escape the project (skill 1.8: one-off outputs live in .ai-tmp/test/).
 #     Check 1 only looks INSIDE the project, so anything written one level out (workspace root) or into
