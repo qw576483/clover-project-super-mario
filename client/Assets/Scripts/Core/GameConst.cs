@@ -43,8 +43,6 @@ namespace SuperMario.Core
         //   · **加速度**：clone 写的是「每个 FixedUpdate 步的增量」，除以 0.02 才是 格/秒²
         //     （例：`walkAccelerationX = 0.14` ⇒ 7.0 格/秒²）。
         //
-        // ⚠️ 曾经的 `JumpScale = 1.5`（把起跳整组 ×1.5、´"跳得快一点"）**已删除**：
-        //   那是本工程自己调的，不在原版里（§0.5 写不出出处的量不许进工程）。
 
         /// <summary>马里奥刚体的重力倍率 —— 出处 [B]。</summary>
         private const float GravityScale = 5.3f;
@@ -104,7 +102,7 @@ namespace SuperMario.Core
         /// <summary>
         /// 最大下落速度（格/秒）。
         /// <para>
-        /// ⚠️ **这一条是"本项目新增"，不是原版值**（clone 的 `Mario.cs` 里没有速度上限）
+        /// **这一条是"本项目新增"，不是原版值**（clone 的 `Mario.cs` 里没有速度上限）
         /// —— 本工程的碰撞是**逐格解算**（`PlayerActor.MoveAndCollide`），单帧位移必须小于半格，
         /// 否则会穿透地面；24 格/秒 @60fps = 0.4 格，是这条保证的上限。
         /// 已登记在 `策划/验收表.md` 的「允许的差异」（E-22）。
@@ -164,9 +162,9 @@ namespace SuperMario.Core
 
         /// <summary>
         /// 无敌星落地后的弹起初速（格/秒）—— 原版的星星是一跳一跳往前走的。
-        /// <para>⚠️ **本项目新增**：这个数值在本项目的两份权威载体（clone / rip 工程）里都没有对应字段，
+        /// <para>**本项目新增**：这个数值在本项目的两份权威载体（clone / rip 工程）里都没有对应字段，
         /// 是既有实现；出处待补，已登记在 `策划/验收表.md` 的「允许的差异」（E-22）。
-        /// 数值保持原样（= 旧 `7.5 × 1.5`），本轮不动它 —— 本轮只钉死有出处的那批。</para>
+        /// 数值保持原样（= 旧 `7.5 × 1.5`）。</para>
         /// </summary>
         public const float StarBounce = 11.25f;
 
@@ -188,7 +186,6 @@ namespace SuperMario.Core
 
         /// <summary>
         /// 多金币砖能连顶出几枚金币。
-        /// <para>出处：元素表 §B-2「多金币砖（MultiCoin）……原版是什么 = **连顶 10 次**的砖块」。</para>
         /// </summary>
         public const int MultiCoinBrickCoins = 10;
 
@@ -216,8 +213,6 @@ namespace SuperMario.Core
         /// <c>:242-246</c>（缩身动画播完 ⇒ `true`，等 <c>2</c> 秒 ⇒ `false`）。
         /// </para>
         /// <para>
-        /// ⛔ 旧值 1.6 是本工程自己估的（注释写着"原版挨打后会闪大约 1.5~2 秒"，把**闪烁时长**当成了无敌时长）。
-        /// 后果（用户实测 2026-09-19，附带日志）：`22:39:49.631 受伤降级` → `22:39:51.253 马里奥死亡`，
         /// 间隔 <b>1.622 秒</b> —— 按原版的 2 秒本该免伤，按 1.6 秒则刚好过期 22 毫秒。
         /// </para>
         /// <para>
@@ -251,11 +246,9 @@ namespace SuperMario.Core
         public const int ScoreFlag = 5000;
 
         /// <summary>
-        /// 通关结算：**每个剩余时间单位换多少分**（原版"剩余时间换分"那一幕，用户 2026-09-19 点名）。
         /// <para>
-        /// ⚠️ <b>出处说明</b>：这条**在 clone 里没有对应实现**（clone 的 `MarioCompleteLevel()` 只
+        /// <b>出处说明</b>：这条**在 clone 里没有对应实现**（clone 的 `MarioCompleteLevel()` 只
         /// `timerPaused = true; ChangeMusic(levelCompleteMusic)`，旗杆不加分、时间也不换分），
-        /// 所以 50 这个数是**原版惯例**、不是从 clone 抄来的 —— 按 §0.5 必须登记在「允许的差异」里。
         /// 兑换节奏 = **一帧兑 1 个单位**（`AppFlow` 的结算段），即 379 个单位约 6 秒，
         /// 与"哗哗往上跳"的观感一致。
         /// </para>
@@ -301,7 +294,6 @@ namespace SuperMario.Core
         /// —— 也就是**直接把竖直速度设成 15**（与站立起跳同一档的起跳初速，见 <see cref="JumpParamsFor"/>）。
         /// </para>
         /// <para>
-        /// ⛔ 旧值 11.25 是本工程自己拍的（旧 `7.5 × 1.5`，登记在「允许的差异」E-22）。后果用户实测：
         /// 「踩到第一个时候不会弹起来一小块，感觉直接碰到第二个了，没有自动连踩」——
         /// 11.25 在普通下落重力下的顶点只有 <b>0.74 格</b>，连一只 1 格高的栗宝宝都过不去；
         /// 15 则是 <b>1.32 格</b>（松手，重力 85.27）/ <b>4.60 格</b>（按住 A，重力 24.44）。
@@ -311,7 +303,7 @@ namespace SuperMario.Core
 
         /// <summary>
         /// 顶砖块时马里奥向上的小反弹（格/秒）。
-        /// <para>⚠️ **本项目新增**：出处待补，登记在「允许的差异」E-22。数值保持原样（= 旧 `3.5 × 1.5`）。</para>
+        /// <para>**本项目新增**：出处待补，登记在「允许的差异」E-22。数值保持原样（= 旧 `3.5 × 1.5`）。</para>
         /// </summary>
         public const float BlockBounce = 5.25f;
         /// <summary>砖块/问号块被顶起来的高度与回落时间。</summary>
@@ -331,10 +323,7 @@ namespace SuperMario.Core
         //   （同一条证据链：`Mario.cs:36` `maxWalkSpeedX = 5.86` 与本工程量到的走速 5.86 格/秒一致）
         //   ⇒ 就是「格/秒」。
         //
-        // ⚠️ 语义订正（本轮）：改前本工程是 `FireballSpeed = 9.5` 且**没有任何出处**；
         //   它也不是"减速度后的稳态"——本工程的火球水平分量本来就是恒速（`Fireball.Update` 每帧
-        //   用同一个 `_vel.x`），所以 9.5 属于"写不出出处的量"。本轮按 clone 真值改掉（20 / 11）。
-        //   竖直方向的 11 同时替换掉原来的 `FireballBounceVelocity = 12`（那也是"本项目新增、出处待补"）。
 
         /// <summary>火球水平速度（格/秒，恒速）—— 出处 clone `MarioFireball.cs:8` `.x = 20`（`:21`/`:26` 写进 `velocity`）。</summary>
         public const float FireballSpeed = 20f;
@@ -347,7 +336,7 @@ namespace SuperMario.Core
         public const float FireballVelocityY = 11f;
 
         /// <summary>火球预制体的重力倍率 —— 出处 clone `Assets/Prefabs/Player/Mario Fireball.prefab:64` `m_GravityScale: 5.5`
-        /// （⚠️ 与马里奥的 <see cref="GravityScale"/> = 5.3 **不同**：火球是另一个预制体）。</summary>
+        /// （与马里奥的 <see cref="GravityScale"/> = 5.3 **不同**：火球是另一个预制体）。</summary>
         private const float FireballGravityScale = 5.5f;
 
         /// <summary>火球重力（格/秒²）= 9.81 × 5.5 ≈ 53.96 —— 出处见 <see cref="FireballGravityScale"/>。</summary>
@@ -355,7 +344,7 @@ namespace SuperMario.Core
 
         /// <summary>
         /// 火球存活上限（秒）。
-        /// <para>⚠️ **本项目新增**：clone 的火球**没有寿命字段**（`MarioFireball.cs` 只在撞墙/撞敌人时
+        /// <para>**本项目新增**：clone 的火球**没有寿命字段**（`MarioFireball.cs` 只在撞墙/撞敌人时
         /// `Explode()`，没有计时器、也没有离屏销毁），不加上限会一直弹到关卡尽头 ⇒ 本工程给 4 秒。
         /// 已登记在「允许的差异」E-22。</para>
         /// </summary>

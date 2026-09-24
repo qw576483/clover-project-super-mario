@@ -5,7 +5,6 @@ namespace SuperMario.Core
     /// <para>
     /// 业务里禁止写裸字符串（<c>Game.Event.Emit("Flow.Start")</c> 这种）。
     /// 理由：改名时编译器帮不上忙，只能全局搜字符串，漏一处就是"点了没反应"。
-    /// 收敛在这里之后，改一个常量名 = 编译期报错，不会静默失效。
     /// </para>
     /// 事件名的命名法是 <c>域.动作</c>，域用来分主语（Flow / Game / Hud）。
     /// </summary>
@@ -19,7 +18,6 @@ namespace SuperMario.Core
 
         // ---- 选角 → 流程 ----
         // 参数是【玩家数】（1 或 2），不是"第几个角色" —— 流程里按
-        // `_playerCount = Mathf.Clamp(count, 1, 2)` 用。注释原先写成 playerIndex，
         // 正是"标题屏和选人屏重复选一遍玩家数"这个困惑的来源。
         public const string CharChosen = "Flow.CharChosen";     // 参数：int playerCount
 

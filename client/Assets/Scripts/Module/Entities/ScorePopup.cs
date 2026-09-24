@@ -26,15 +26,14 @@ namespace SuperMario.Module.Entities
     /// 的重复实现（引擎已有屏幕空间飘字层，含节点池与相机投影）。
     /// </para>
     /// <para>
-    /// ⚠️ 为什么要留一个**空的** GameObject 作为句柄（而不是干脆不要这个类）：
+    /// 为什么要留一个**空的** GameObject 作为句柄（而不是干脆不要这个类）：
     /// 调用方 <see cref="ItemModule"/> 的契约是"<c>Spawn</c> 回一个带 <c>Finished</c> / <c>Clear</c> 的对象、
     /// 由 <c>Reap</c> 回收"，取证脚本 <c>tools/probes/probe.cs</c> 的 <c>ScorePopupCount()</c> /
     /// <c>ScorePopupReadout()</c> 也按"场上活着的 <c>ScorePopup</c> 组件"读读数（E-19 那条链）。
-    /// 这个句柄节点**不带 Canvas / Text / Graphic**（比旧实现少了三样重件），只为把"这条飘字还在不在"
     /// 这个可观测事实保留下来；画面一个字都不由它画。
     /// </para>
     /// <para>
-    /// ⛔ 数字不重写：上移距离与用时直接取上面那个剪辑（3 格 / 0.5 秒），生命周期 = 剪辑长度。
+    /// 数字不重写：上移距离与用时直接取上面那个剪辑（3 格 / 0.5 秒），生命周期 = 剪辑长度。
     /// 不做淡出（剪辑里没有 alpha 曲线）。
     /// </para>
     /// </summary>
@@ -51,7 +50,7 @@ namespace SuperMario.Module.Entities
         /// 依据：本项目 1 格 = <c>GameConst.TileSize</c> = **1** 世界单位
         /// （`spritePixelsPerUnit = 16`、一个瓦片边长 = 1 世界单位，见项目级 `conventions.md` §像素基准
         /// 与 `GameConst.TileSize` 的注释）⇒ 3 格 = 3 世界单位。
-        /// ⛔ 不要在这里写常量 3：换算必须跟着 `GameConst.TileSize` 走，否则改世界尺度时这里会静默错。
+        /// 不要在这里写常量 3：换算必须跟着 `GameConst.TileSize` 走，否则改世界尺度时这里会静默错。
         /// </summary>
         private static readonly float RiseWorld = RiseTiles * GameConst.TileSize;
 
@@ -66,9 +65,9 @@ namespace SuperMario.Module.Entities
             var world = new Vector3(worldPos.x, worldPos.y, 0f);
 
             // 画面交给引擎：**0.5 秒 / 直线上升 3 格 / 不淡出**（出处见类注释里的那份剪辑）。
-            //   ⛔ duration 必须显式传 0.5 —— 引擎默认 1.2s；
-            //   ⛔ fade 必须显式传 false —— 引擎默认 true（alpha = 1 - t² 淡出），而原版剪辑里没有 alpha 曲线；
-            //   ⛔ riseWorld 用世界单位（不传的话引擎沿用旧的"屏幕升距 70 画布单位"，与关卡尺度对不上）。
+            //   duration 必须显式传 0.5 —— 引擎默认 1.2s；
+            //   fade 必须显式传 false —— 引擎默认 true（alpha = 1 - t² 淡出），而原版剪辑里没有 alpha 曲线；
+            //   riseWorld 用世界单位（不传的话引擎沿用旧的"屏幕升距 70 画布单位"，与关卡尺度对不上）。
             if (Game.UI != null)
             {
                 Game.UI.FloatText(world, text, Color.white, duration: Life, riseWorld: RiseWorld, fade: false);

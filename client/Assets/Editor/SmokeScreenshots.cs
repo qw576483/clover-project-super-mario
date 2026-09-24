@@ -13,7 +13,7 @@ namespace SuperMario.EditorTools
     /// <summary>
     /// 冒烟自审（**手动触发**）：在编辑器里点菜单跑一遍并截图。
     /// <para>
-    /// ⚠️ <b>已被 <c>scripts/play-driver.ps1</c> 取代</b>（那条链才是自动化入口，能带参数、能收日志）；
+    /// <b>已被 <c>scripts/play-driver.ps1</c> 取代</b>（那条链才是自动化入口，能带参数、能收日志）；
     /// 本菜单项**保留**只为"手上没有脚本时也能人肉跑一遍"这个兜底场景。
     /// </para>
     /// <para>
@@ -25,9 +25,8 @@ namespace SuperMario.EditorTools
     /// 轮询状态推进而不是等固定秒数：加载耗时随机器变化，按秒截会得到一堆空图。
     /// </para>
     /// <para>
-    /// ⛔ <b>截图目录已移出工程树</b>：输出到 <c>&lt;项目根&gt;/.ai-tmp/screenshots</c>
+    /// <b>截图目录已移出工程树</b>：输出到 <c>&lt;项目根&gt;/.ai-tmp/screenshots</c>
     /// （见 <see cref="SuperMario.Core.EvidencePaths"/>，可用环境变量 <c>SMB_SHOT_DIR</c> 覆盖）。
-    /// 原先是工程内的 <c>_smb_work/shots</c> —— 跑一次就在工程树里留一堆 png（证据落进 <c>Assets/</c> 是违规产物）。
     /// </para>
     /// </summary>
     public static class SmokeScreenshots
@@ -116,8 +115,6 @@ namespace SuperMario.EditorTools
 
         private static void Shot(string name)
         {
-            // 收敛到引擎 `CloverEngine.Screenshot.CaptureToFile`（原来是手写
-            // `Texture2D` + `ReadPixels` + `EncodeToPNG` + `DestroyImmediate` —— 与 SmokeTests 里那份逐字重复）。
             // 引擎版负责：目录不存在时递归创建、屏幕尺寸非法 / 编码失败时**返回 false + Error 留痕**
             // （手写版这几条失败分支全是静默的），并在 finally 里销毁临时纹理。
             // 调用时机未变：仍在 `EditorApplication.update` 这一拍里同帧读屏。

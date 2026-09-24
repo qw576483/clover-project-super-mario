@@ -57,7 +57,7 @@ namespace SuperMario.UI
         /// 三段式（含字号 / 底距 / 文案默认值）都在那里。
         /// </para>
         /// <para>
-        /// ⛔ 节点名恒为 <c>Signature</c>：闸门 `engine-credit`（`tools/verify.ps1`）按这个名字在
+        /// 节点名恒为 <c>Signature</c>：闸门 `engine-credit`（`tools/verify.ps1`）按这个名字在
         /// MainMenuPanel / BootPanel 上读**运行时**的实际文本与字体，改名即判据失效。
         /// </para>
         /// <para>
@@ -65,16 +65,12 @@ namespace SuperMario.UI
         /// ① 引擎资源缓存里已有小写字体（同步取，正常情况）；
         /// ② 没有 ⇒ 立刻异步装一次，**先用引擎内置字体顶着**（内置字体有小写字形，
         ///    渲染出来仍是小写，只是字形不是像素风；这一帧的观感差异可忽略），并在此留一条 Warn；
-        /// ③ 装配失败 ⇒ 打 Error（§7：非预期分支必须留日志），gate `engine-credit`
         ///    会因为字体名对不上而**变红**，不会静默退化成"看起来还行"。
         /// </para>
         /// <para>
-        /// ⛔ 为什么不能用 <see cref="Font"/>（本项目像素字体）：那份 NES 像素字体里 a-z 与 A-Z
-        /// 是**同一套字形** ⇒ 源码文本是 `by clover-engine`，画面上却是 `BY CLOVER-ENGINE`（用户肉眼发现的缺陷）。
-        /// 全局 skill §1.6 的判据是"渲染出来的字**逐字**对"，所以这一行必须用真有小写字形的字体
+        /// 为什么不能用 <see cref="Font"/>（本项目像素字体）：那份 NES 像素字体里 a-z 与 A-Z
         /// （出处见 <see cref="Core.ResPaths.CreditFont"/>）。
         /// </para>
-        /// <para>颜色由调用方给：用户 2026-09-19 明说首页那行要**白色**（引擎默认是 alpha 0.55 的浅色）。</para>
         /// </summary>
         public static Text CreditLabel(Transform parent, Color color)
         {
@@ -95,7 +91,6 @@ namespace SuperMario.UI
         /// <summary>署名行字号。出处 = 原启动画面 / 标题屏两处各自写的 16。</summary>
         private const int CreditFontSize = 16;
 
-        /// <summary>署名行离面板底边的距离（画布单位）。出处 = 同上两处原先写的 <c>y = 16</c>。</summary>
         private const float CreditBottomOffset = 16f;
 
         private static Font _creditFont;
@@ -135,17 +130,15 @@ namespace SuperMario.UI
             });
         }
 
-        /// <summary>署名文案。**单一来源**：代码里别处不许再写这一串（§1.6 要求逐字）。</summary>
         public const string CreditText = "by clover-engine";
 
         // ───────── 本文件保留的"薄包装"是什么、为什么还留着 ─────────
         //
         // 建件（节点 / 纯色块 / 文字 / 按钮）**全部**转发引擎 `CloverEngine.UIFactory`
         // （`Runtime/Presentation/UIWidgets.cs` + `UIWidgetControls.cs`），本项目不再自己写
-        // anchorMin/anchorMax/pivot 那一套计算 —— 那类重复实现正是踩坑高发区（见 Label 的历史注释）。
         //
         // 只留三样**项目内容**在这里，引擎按设计**不含**它们（见 UIWidgetControls.cs 文件头
-        // 「⛔ 没有下沉：配色 / 文案 / 字号档位都是业务取值」）：
+        // 「没有下沉：配色 / 文案 / 字号档位都是业务取值」）：
         //   ① NES 像素字体（`Font` 属性：预热 + 同步取 + 回落 + 留痕）；
         //   ② 字号吸附到 16 的整数倍（`SnapFontSize`）；
         //   ③ 像素色板（SkyBlue / TitleBg / Brick / CoinGold / Black —— 全是"复刻 NES 画面"的实测色）。
@@ -180,7 +173,6 @@ namespace SuperMario.UI
         /// </summary>
         public static Image Block(Transform parent, string name, Color color, Vector2 anchor, Vector2 pos, Vector2 size)
         {
-            // raycastTarget 传 true：与旧实现（自建 Image）的默认值一致。
             var img = UIFactory.CreatePanel(name, parent, color, true);
             UIFactory.Place(img.rectTransform, anchor, new Vector2(0.5f, 0.5f), pos, size);
             return img;
@@ -204,9 +196,8 @@ namespace SuperMario.UI
         public static Text Label(Transform parent, string name, string content, int size,
                                  TextAnchor anchor, Vector2 anchorPos, Vector2 boxSize, Color color)
         {
-            // ★ 锚点一律取【父节点中心】，不跟着 TextAnchor 走。
+            // 锚点一律取【父节点中心】，不跟着 TextAnchor 走。
             //
-            // 踩过的坑（症状很误导）：原先按对齐方式平移锚点 —— 左对齐锚父节点左边、
             // 右对齐锚右边。面板根节点只有 100x100 时看不出问题；一旦根节点铺满屏幕
             // （那才是它本该有的样子），左对齐文案的锚点就变成了【屏幕左边缘】，
             // 坐标为负的选项（如 -180）被整段推出屏幕外 —— 菜单三行选项全部消失，
@@ -227,7 +218,6 @@ namespace SuperMario.UI
             if (Font != null) t.font = Font;
             t.fontSize = SnapFontSize(size);
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            // 旧实现（自己 AddComponent<Text>）走的是 Unity 默认值 true；这里显式写回，保持渲染口径不变。
             t.supportRichText = true;
             UIFactory.Place(t.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchorPos, boxSize);
             return t;
@@ -254,7 +244,6 @@ namespace SuperMario.UI
             btn.colors = colors;
 
             // 引擎建的文字（内置字体 / 26 号 / 浅色）必须换成本项目口径：像素字体 + 字号吸附。
-            // 节点改名 "Text" 只为与旧实现（自建的 Text 子节点同名）保持排障 / 取证口径一致。
             var label = img.GetComponentInChildren<Text>(true);
             if (label != null)
             {
@@ -284,8 +273,6 @@ namespace SuperMario.UI
         /// 报"本工程 vs 原版"的每通道最大差）。
         /// </para>
         /// <para>
-        /// ⚠️ 原来这里用的是 <see cref="SkyBlue"/>（＝关卡天空色）—— 那是**照另一份复刻工程的菜单图**
-        /// 配的（自审表早就警告过"拿 clone 的菜单当基准会做成 clone 的菜单"）。2026-09-18 按原版实测色订正。
         /// </para>
         public static readonly Color TitleBg = new Color(146f / 255f, 144f / 255f, 1f);
 

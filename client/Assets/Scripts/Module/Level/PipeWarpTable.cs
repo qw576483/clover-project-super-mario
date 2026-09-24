@@ -49,7 +49,6 @@ namespace SuperMario.Module.Level
         /// </para>
         /// <para>
         /// 用途：侧向进管的走距 = "从当前右边缘走到管口内侧沿（管口面 + 本值）"。
-        /// ⛔ 别拿"马里奥自身贴图宽度"当走距（那是凭空值，登记项 E-24 的根因），
         /// 也别停在管口面上（用户实测："进管道效果没有，人就卡在管道外"）。
         /// </para>
         /// </summary>
@@ -87,24 +86,13 @@ namespace SuperMario.Module.Level
     /// 传送管坐标表（1-1 与 1-2 各一套）。
     /// <para>
     /// <b>这里的每一个数都出自《原版1-1与1-2元素表》，不许在别处自己定坐标</b>；
-    /// 出处写成「元素表 §X + clone 场景行号 / 本项目关卡文件的行」，改坐标时对着元素表重新核对。
     /// </para>
     /// </summary>
     public static class PipeWarpTable
     {
-        // ───────────────────────── 1-1（元素表 §1.3 / §3.2）─────────────────────────
         //
-        // 进管的那根管：§1.3 #4 `Warp Green Pipe 2x4 Down.prefab`，clone world `(53,0)`
-        //   ⇒ 本工程格 x=43..44, y=-3..0（二宽四高，坐在 y=-4 的地面上）；
         //   出处 `原版资源/参考工程/SMB-clone/Assets/Scenes/World 1-1.unity:3778`。
-        //   管口**顶面** = 瓦片 y=0 的上沿 = EntryPipeTopY = 1。
-        // 出场管：§1.3 #5 `Warp Green Pipe 2x2 Up.prefab`，clone `(158.5,0.5)`
-        //   ⇒ 本工程格 x=149..150, y=-3..-2；出处 `World 1-1.unity:8838`。
-        //   管口顶面 = 瓦片 y=-2 的上沿 = ReturnPipeTopFeet.y = -1；
         //   管子跨越 x=149..151，所以"从管里顶出来的位置"取 x=150（两格中间）。
-        // 密室落点：§3.2「玩家落点 clone (-6,9)」⇒ 本工程格 (-15,6)（T = clone − (9,3)）。
-        // 密室出口管：§3.2 的侧向管 cells=x=5..8,y=0..10 ⇒ 本工程格 x=-4..-1
-        //   ⇒ 马里奥在主关卡式地向右走时，右边缘顶到的那一面是 x=-4。
 
         /// <summary>进管管口的 x 范围（左含、右不含）：马里奥脚底 x 落在 [43,45) 才算站在这根管子上。</summary>
         public const float EntryPipeMinX = 43f;
@@ -124,27 +112,19 @@ namespace SuperMario.Module.Level
 
         /// <summary>
         /// 1-1 那一套。上面那六个公开常量/字段就是它的值 —— 这里**复用**它们构造，
-        /// 不再抄第二份数字（两处各写一份必然会漂移）。
         /// </summary>
         public static readonly PipeWarpInfo Level11 = new PipeWarpInfo(
             ResPaths.Level11Underground, "第 4 根水管", EntryPipeMinX, EntryPipeMaxX, EntryPipeTopY,
             BonusRoomSpawn, BonusRoomExitFaceX, ReturnPipeTopFeet, 19,
             "元素表 §1.3 #4/#5（World 1-1.unity:3778 / :8838）、§3.2（19 枚金币）");
 
-        // ───────────────────────── 1-2（元素表 §4.1 / §4.2）─────────────────────────
         //
-        // 进管的那根管：§4.1 表第 1 行 `Warp Green Pipe 2x3 Down.prefab`，clone world `(100.5,0)`
         //   （modifications 把 sceneName 覆盖成了 `World 1-2 - Underground`，是**唯一**进管点），
         //   出处 `原版资源/参考工程/SMB-clone/Assets/Scenes/World 1-2.unity:11125`。
         //   它在 `client/Assets/Resources/Levels/World1-2.txt` 里的格是 **x=100..101, y=0..2**
         //   （2 宽 3 高、坐在 y=-1 地面上；同文件另两根管 106..107 高 4、112..113 高 2，
-        //    正好对上 §4.1 的 2x4 装饰管与 2x2 出场管）⇒ 管口顶面 = 瓦片 y=2 的上沿 = 3。
-        // 出场管（从密室顶出来的那根）：§4.1 表第 3 行 `Warp Green Pipe 2x2 Up.prefab`（挂在 `Spawn Pipes` 容器下），
         //   clone `(112.5,0.5)`，出处 `World 1-2.unity:22513`
-        //   ⇒ `World1-2.txt` 的 x=112..113, y=0..1 ⇒ 管口顶面 = 瓦片 y=1 的上沿 = 2；
         //   管跨 x∈[112,114] ⇒ "从管里顶出来"取中间 x=113。
-        // 密室落点：§4.2「玩家落点 clone (-6,9)」（本密室关卡文件就是 clone 格坐标）⇒ (-6,9)。
-        // 密室出口管：§4.2 的出口侧向管管口 2 格在 x=5,6 ⇒ 右边缘顶到的那一面是 x=5。
 
         /// <summary>1-2 那一套（出处见上面那段注释）。</summary>
         public static readonly PipeWarpInfo Level12 = new PipeWarpInfo(

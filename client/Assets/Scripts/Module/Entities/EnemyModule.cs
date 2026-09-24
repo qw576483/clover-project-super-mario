@@ -113,7 +113,6 @@ namespace SuperMario.Module.Entities
         public void Reap()
         {
             // 走接口上的 Finished，而不是 `is Goomba g` ——
-            // 原来写成具体类型之后，新增敌人种类时这里会被【静默跳过】：
             // 敌人演完了却永远不回收，数量只增不减（而且不报错）。
             for (var i = _active.Count - 1; i >= 0; i--)
             {
@@ -162,9 +161,8 @@ namespace SuperMario.Module.Entities
             _sr.sortingOrder = 5;
             RecomputeBounds();
 
-            // ★ 名字与目录必须和 SpriteNames 里登记的一致，别在这里手写。
+            // 名字与目录必须和 SpriteNames 里登记的一致，别在这里手写。
             //
-            // 踩过的坑：这里原来写死了 ResPaths.Enemy("Goomba0") / ResPaths.Item("GoombaFlat")，
             // 这两个文件根本不存在（栗宝宝不是 smb_enemies_sheet 里的切片，而是
             // smb1_misc_sprites 这张"混合表"里的 385 / 399 号，导入时按表名落在 Items/ 下）。
             // 后果不是报错了事：加载回调不来，栗宝宝就是一个【没有贴图的空白 SpriteRenderer】，
@@ -335,7 +333,7 @@ namespace SuperMario.Module.Entities
         // 尺寸按贴图实测（贴图换了，盒子必须一起改，否则"踩不到头"）：
         //   走路帧 38/40 的内容高 24 像素 = 1.5 格 —— 原版乌龟就是 1.5 格高，比小马里奥高一头；
         //   壳 42 的内容高约 14 像素 ≈ 0.9 格。
-        // ⚠️ 之前那版暗色乌龟贴图只有 17 像素高，盒子才写成 1.05；换回正确贴图后必须放大。
+        // 之前那版暗色乌龟贴图只有 17 像素高，盒子才写成 1.05；换回正确贴图后必须放大。
         private static readonly Vector2 WalkSize = new Vector2(0.9f, 1.5f);
         private static readonly Vector2 ShellSize = new Vector2(0.9f, 0.9f);
 
@@ -366,13 +364,13 @@ namespace SuperMario.Module.Entities
             transform.position = new Vector3(feetPos.x, feetPos.y, 0f);
             RecomputeBounds();
 
-            // ★ 贴图挂在【两级子节点】上，专门为了能绕"壳中心"自转：
+            // 贴图挂在【两级子节点】上，专门为了能绕"壳中心"自转：
             //      Koopa（脚底，物理/碰撞都读这个 transform）
             //       └─ Pivot（上移 = 贴图中心高度，转它 = 绕中心转）
             //           └─ Art（下移同样距离，SpriteRenderer 在这）
             // 这样转 Pivot 时可见位置一点不动，而 transform.position 始终是脚底 ——
             // 物理、落地对齐、Bounds 全都不受影响。
-            // ⚠️ 直接转 Koopa 自己是不行的：贴图轴心在【底部居中】，转起来是绕脚底转，
+            // 直接转 Koopa 自己是不行的：贴图轴心在【底部居中】，转起来是绕脚底转，
             // 壳会像被甩出去一样划一个圈，看着比不转还怪。
             _pivot = new GameObject("Pivot").transform;
             _pivot.SetParent(transform, false);
@@ -477,7 +475,6 @@ namespace SuperMario.Module.Entities
             // 速度逐项有出处（`GameConst` 里带着 `文件:行`）：
             //   走路 = `Green Koopa.prefab:166` 的 `Speed: {x: 2.5, y: 0}`；
             //   滑行的壳 = `KoopaShell.cs:12` 的 `rollSpeedX = 7`。
-            // （原先壳速是 `GoombaSpeed × 3.2`，那是本项目自己乘出来的，已删。）
             var speed = _mode == Mode.ShellMoving ? GameConst.ShellRollSpeed : GameConst.KoopaWalkSpeed;
             ApplyGravityAndCollide(dt, _dir * speed * dt);
 
@@ -485,7 +482,6 @@ namespace SuperMario.Module.Entities
             {
                 // 走路：在【两张贴图】之间切换。
                 //
-                // ⚠️ 这里原来是 `_sr.flipX = !_animFlip` —— 拿同一张图左右翻当动画。
                 // 两个后果：① 乌龟看着像在原地"打转"，不像迈腿；
                 // ② flipX 同时承担【朝向】职责，动画与朝向互相覆盖 ⇒ 朝哪边都乱。
                 // 正确做法：**朝向**交给 flipX（贴图画的是朝左，往右走才翻），
@@ -500,7 +496,7 @@ namespace SuperMario.Module.Entities
                 {
                     var s = _walkFrame == 0 ? _walkSprite : _walkSprite2;
                     if (s != null) _sr.sprite = s;
-                    // ⚠️ 绿龟这两张贴图画的是【朝右】（实测头部像素的重心在右侧），
+                    // 绿龟这两张贴图画的是【朝右】（实测头部像素的重心在右侧），
                     // 所以往【左】走才需要翻 —— 与之前那版暗色乌龟（朝左）刚好相反。
                     // 搞反了的表现是"乌龟倒着走"。
                     _sr.flipX = _dir < 0f;
@@ -508,7 +504,7 @@ namespace SuperMario.Module.Entities
             }
             else if (_mode == Mode.ShellMoving)
             {
-                // ★ 被踢出去的壳【边滑边转】。
+                // 被踢出去的壳【边滑边转】。
                 // 每帧 720°（一秒两圈）：壳在滑行时"转起来"才看得出它是滚出去的，否则
                 // 就是一只深色无头的壳贴地平移，看着很怪（实测就是这么被指出来的）。
                 // 转的是 Pivot（壳中心），不是 Koopa 自己 —— 见 Init 的注释。
@@ -613,7 +609,7 @@ namespace SuperMario.Module.Entities
             if (_sr != null)
             {
                 // 被火球 / 龟壳撞死 = 整只【翻肚皮】（原版就是这样），用走路贴图竖着翻过来，
-                // 不是换成壳。⚠️ 贴图轴心是【底部居中】，flipY 是绕着脚底镜的 ——
+                // 不是换成壳。贴图轴心是【底部居中】，flipY 是绕着脚底镜的 ——
                 // 不把位置抬起来的话，翻过来的身体会出现在地面【以下】（像陷进地里）。
                 _sr.sprite = _walkSprite;
                 _sr.flipY = true;
@@ -658,7 +654,6 @@ namespace SuperMario.Module.Entities
     /// （整棵花都在管口之上），缩回 = 再往下 <c>TravelTiles</c>（= 预制体 Up Stop +2 − Down Stop −1）格。
     /// </para>
     /// <para>
-    /// ⛔ 旧实现按"数据格中心 ± 止点 − 贴图高/2"折算，把伸出位置压到管口**以下 1.31 格**：
     /// 只有头顶约 0.3 格露在外面，看着像"花不出来、只露出一截根"（用户实测）。
     /// 本工程精灵轴心是**底部居中**，所以 <c>transform.position.y</c> = 植物**底边**。
     /// </para>
@@ -713,7 +708,6 @@ namespace SuperMario.Module.Entities
         /// <summary>
         /// 0 上升 / 1 在外停 / 2 下降 / 3 在内停。
         /// <para>**初值必须是 3（在管内）**：原版的食人花开局都缩在管里、等一会儿才伸出来
-        /// （所以"开局站在管口是安全的"）。原先默认 0（= 一出场就在上升）——
         /// 实测后果：1-2 地表段从出管口升起时，管子里的花正好在外，人一露头就被咬死。</para>
         /// </summary>
         private int _phase = 3;
@@ -773,7 +767,6 @@ namespace SuperMario.Module.Entities
             var row = Mathf.FloorToInt(pos.y);
             if (!_level.IsSolidTile(col, row))
             {
-                // 非预期分支必须留痕（§7）：量不到就退回"数据格 + 2 格"这个已知关系，并且报出来。
                 Game.Logger.Warn("Enemy",
                     $"食人花 ({pos.x:F2},{pos.y:F2})：所在格 ({col},{row}) 不是实心格 ⇒ 量不到管口，" +
                     $"按数据关系取 y={pos.y + 1.5f:F2}");
@@ -786,13 +779,11 @@ namespace SuperMario.Module.Entities
         /// <summary>
         /// 伸出 / 缩回位置的**底边** y。
         /// <para>
-        /// ⛔ 旧实现是 `(数据格中心 − 0.5) + 止点 − 贴图高/2`（把预制体的"中心止点"折算成底边）。
         /// 那套算式把伸出位置压到管口**以下 1.31 格**（贴图 18×26 px = 1.125×1.625 格，比 1.5 格画布多 1 px 透明边），
         /// 结果只有头顶约 0.3 格露在管口外 —— 用户实测就是「花不会完全出来，只看到一截花根」
         /// （露出来的那一小截其实是两片花瓣的顶尖，看着像根茎）。
         /// </para>
         /// <para>
-        /// 现在锚到**管口顶面**（用户本轮明确要求"花要完全出来" ⇒ 用户 > 规则层）：
         /// 伸出时底边 = 管口（整棵花都在管口之上），
         /// 缩回 = 伸出位置往下 <see cref="TravelTiles"/> 格（行程仍取预制体的 Up−Down 止点）。
         /// </para>
@@ -868,7 +859,7 @@ namespace SuperMario.Module.Entities
                     break;
             }
 
-            // ⚠️ 这里**不做**"马里奥一靠近就立刻把花按回去"。
+            // 这里**不做**"马里奥一靠近就立刻把花按回去"。
             // 原版就是这么写的：靠近只影响"还能不能再伸出来"（`Piranha.cs:37` 设 canMove=true；
             // `:40` 在**下止点**且靠近时设 canMove=false）。已经伸在外面的那一轮照常走完 ——
             // 立刻缩回会让"站在管口等它出来"变成一个假规则，也让远程火球失去窗口。

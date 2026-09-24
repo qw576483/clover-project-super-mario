@@ -94,7 +94,6 @@ namespace SuperMario.Module.Player
         // （玩家 10 > 地形 0）会**画在管子前面**：
         //   ① 下管时人能看见自己"陷"进管子里（用户实测："人下管道为什么能看到人"）；
         //   ② 出管升起时人是**从地里/管子里画着走出来的**（用户实测："出管道一瞬间会被管道弹开"）。
-        // 修法与食人花（`EnemyModule` 的 `Piranha`）同一条：管中移动期间把玩家画到**地形之下**
         // （−1：在地形 0 之后、背景 −20 之前），于是"没入管口以下的部分"自然被管子/地面挡住，
         // 露在管口之上的部分照常可见 —— 就是原版那个"从管口冒出来"的观感。
         /// <summary>正常时的排序：地形 0、背景 −20、实体 5~8 ⇒ 玩家画在它们之上。</summary>
@@ -306,11 +305,10 @@ namespace SuperMario.Module.Player
         /// 撞到管子本体才换场。
         /// </para>
         /// <para>
-        /// ⛔ 走距**不能**是"走到管口面为止"：管口面（`BonusRoomExitFaceX` / `# side-exit`）正是
+        /// 走距**不能**是"走到管口面为止"：管口面（`BonusRoomExitFaceX` / `# side-exit`）正是
         /// 管口那 2 格**开口的左边沿**，走到那里人还整整齐齐站在管子外面 ——
         /// 用户实测的原话就是「出管道时候进管道效果没有，人就卡在管道外，然后操作不了」：
         /// 走距 0 ⇒ 过场一步没走（`TickPipeMove` 空转）⇒ 流程层等 3 秒兜底超时强制换场，
-        /// 人在这 3 秒里既不动也不能操作。日志原文（2026-09-19 20:48:51.648）：
         /// `侧向进管：管口面 x=-4.00 … 当前右边缘 x=-4.00 ⇒ 走距 0.00 格` → `管中移动开始 距离=0.00`
         /// → 3.010 秒后 `[Warn] 管中过场超时（3 秒，OutOfRoom）—— 强制结束该过场`。
         /// </para>
@@ -340,15 +338,12 @@ namespace SuperMario.Module.Player
 
         /// <summary>
         /// 本次侧向进管的**管口面**世界 x。两处侧向进管各有各的数据源，**都不在这里写数**：
-        /// 密室（<see cref="StageContext.SubArea"/>）用 <see cref="PipeWarpTable"/>（元素表 §1.3 / §4.2 的
-        /// 出口面 x），主关卡段用关卡数据声明的 `# side-exit`（= 原版整关海报上那根管的管口面）。
         /// </summary>
         private float SidePipeFaceX()
         {
             if (StageContext.SubArea) return PipeWarpTable.Current.BonusRoomExitFaceX;
             if (_level != null && _level.HasSideExit) return _level.SideExitFaceX;
 
-            // 非预期分支必须留日志（§7）。取不到管口面时**原地不动**：宁可少走一步，
             // 也不要再把人送进实心格（E-24 就是这么来的）。
             Game.Logger.Warn("Player",
                 "侧向进管过场：关卡数据没有 # side-exit、当前也不是密室 ⇒ 取不到管口面，走距取 0");
@@ -407,11 +402,8 @@ namespace SuperMario.Module.Player
                 if (_pipeRemaining > 0f) return;
             }
 
-            // ★ 收尾分支**必须**在"距离为 0"时也走到 —— 这是"侧向进管走距 0 ⇒ 流程层空等 3 秒"
-            //   那个 bug 的根因：旧代码开头就是 `if (_pipeRemaining <= 0f) return;`，
-            //   于是 0 距离的过场**永远不结束**：`Busy` 一直是 true、`ControlsEnabled` 一直是 false，
+            // 收尾分支**必须**在"距离为 0"时也走到 —— 这是"侧向进管走距 0 ⇒ 流程层空等 3 秒"
             //   流程层只能等兜底超时强制换场（人在这 3 秒里卡在管口外、操作不了）。
-            //   日志原文见 StartPipeEnterSide 的注释（2026-09-19 20:48:51）。
             //   到位后停在原地等流程层换场 —— 不跑物理、不读输入（人此刻埋在管子里，
             //   一跑碰撞解算就会被管壁推出来，画面会看到"人从管子里弹出来一下"）。
             _pipeRemaining = 0f;
@@ -430,12 +422,11 @@ namespace SuperMario.Module.Player
             var h = _sr != null && _sr.sprite != null ? _sr.sprite.bounds.size.y : 0f;
             return h > 0.01f ? h : _size.y;
         }
-        // 注：旧代码里还有一个 CurrentSpriteWidth()（"侧向进管走距 = 自身贴图宽度"的出处），
-        // 那个量写不出原版出处（E-24 的根因）⇒ 本轮已删；走距改成"到管口面为止"。
+        // 注：旧代码里还有一个 CurrentSpriteWidth()（"侧向进管走距 = 自身贴图宽度"的出处）。
 
         public void BounceAfterStomp()
         {
-            // ★ 只设竖直速度，**不**按"是否按住跳键"改数值。
+            // 只设竖直速度，**不**按"是否按住跳键"改数值。
             //
             // 出处 = clone `LevelManager.cs:343-348`：`velocity = new Vector2(velocity.x + bounce.x, bounce.y)`，
             // 15 是个常数；"按住 A 弹得更高"在原版里靠的是**重力变小**（上升且按住 A → `GravityJumpHeld`），
@@ -596,7 +587,7 @@ namespace SuperMario.Module.Player
         /// 跳跃与重力（clone `Mario.cs:186-212` 的搬运）：
         /// ① 起跳瞬间按**当前水平速度**取一组参数（起跳初速 + 上升 / 下落两个重力）；
         /// ② "按得越久跳得越高"在原版里靠的就是**变重力**（上升且按住 A 用较小的重力）；
-        /// ③ ⚠️ 原版**没有**"松手截断上升速度"这套机制，所以本工程也不再截断
+        /// ③ 原版**没有**"松手截断上升速度"这套机制，所以本工程也不再截断
         ///    （曾经有一个 `JumpCutVelocity`，那是本工程自己加的，已删）。
         /// </summary>
         private void JumpAndGravity(float dt)
@@ -661,8 +652,6 @@ namespace SuperMario.Module.Player
         /// <summary>
         /// 取旗子：读 <see cref="StageContext.Flag"/>（由建它的 LevelProps 登记）。
         /// <para>
-        /// 踩过的坑（历史债 E-5）：这里原先是 <c>GameObject.Find("Flag")</c> 按名字找 ——
-        /// 名字或层级一改就静默失效，只剩"旗子不动"这个看不出原因的观感问题。
         /// </para>
         /// </summary>
         /// <summary>
@@ -710,10 +699,7 @@ namespace SuperMario.Module.Player
 
             // 降旗：原版是"马里奥抓住杆的同时旗子一起降到杆底"。
             //
-            // ★ 旗子的终点是**自己的底边落在杆底**，不是"中心落到杆底"。
-            //   踩过的坑（用户实测 2026-09-20）：「1-1 时候 旗子好像会下降到旗子最下面 砖的下面」——
-            //   原来写的是 `flag.position.y = y`（y = 马里奥脚底 = 杆底），而旗子贴图是**居中轴心**
-            //   ⇒ 中心落到地面高度 ⇒ **下面半面沉到地面 / 基座砖以下**。
+            // 旗子的终点是**自己的底边落在杆底**，不是"中心落到杆底"。
             //   原版的写法在 clone `FlagPole.cs:22-23`：`while (flag.position.y > flagStop.position.y)`
             //   —— 降旗有一个**专门的终点对象**（`Flag Stop`），不是"跟马里奥脚底同高"。
             //   本工程没有那个标记对象，所以按同一语义自己定：底边 = 杆底 ⇒ 中心 = 杆底 + 半个旗高。
@@ -736,12 +722,9 @@ namespace SuperMario.Module.Player
                 x = _castleDoorX;
                 _motion = PlayerMotion.LevelClear;
                 Busy = false;
-                // ⛔ 这里**不放**通关音乐（原先是 `_audio?.PlaySfx(Sfx.LevelComplete)`）：
-                //   用户 2026-09-20 点名「通关音乐会播两次，时间倒计时开始时候要，结束那次不要」——
                 //   全项目只在 `AppFlow.TickStage` 的「倒计时开始」那一刻放一次。
                 //   这一步只负责"人走进门消失 + 通知流程"。
                 // 走进门 = 人就该【不见了】（原版：进城堡后马里奥消失，只留城堡）。
-                // 踩过的坑：这里原先只是停下，于是马里奥站在城堡门口一动不动（实测被指出）。
                 if (_sr != null) _sr.enabled = false;
                 Game.Event.Emit(Events.LevelCleared);
             }
@@ -749,7 +732,6 @@ namespace SuperMario.Module.Player
             RecomputeBounds();
 
             // 走进城堡【也要有走路动画】。
-            // 踩过的坑：这里原来只写 `_sr.sprite = _sprites.Get(CurrentRunFrame())`，
             // 而 _runFrame 只在 TickRunAnimation 里推进 —— 那函数开头就是
             // `if (_motion != PlayerMotion.Normal) return;`，而过场期间 _motion 是 FlagWalk
             // ⇒ _runFrame 恒为同一个值 ⇒ 马里奥一路"滑"进城堡（实测被指出"没有行走动画"）。
@@ -820,7 +802,7 @@ namespace SuperMario.Module.Player
                 var newX = p.x + dx;
                 var rect = new Rect(newX - _size.x * 0.5f, p.y, _size.x, _size.y);
                 // 逐格枚举收敛到引擎 GridUtil.ForEach（委托缓存到字段 ⇒ 热路径零分配，
-                // 见 Runtime/Core/GridUtil.cs 文件头 ★ GC）。算法一字未动：仍是
+                // 见 Runtime/Core/GridUtil.cs 文件头 GC）。算法一字未动：仍是
                 // "命中第一格就停（_xHit 复刻原 break）+ 移动平台格不挡横移"，见 OnScanX。
                 _xNewX = newX;
                 _xHit = false;
@@ -872,8 +854,7 @@ namespace SuperMario.Module.Player
                     {
                         // 头顶撞到东西：脚停在**格的底边**（cell.y），记录格子给玩法模块（顶砖块 / 问号块）。
                         //
-                        // ★ 脚要停在**格的底边**，不是格的顶边。
-                        //   这里原来写的是 `carrierTop - _size.y`（= 格的**顶**边减身高）⇒ 马里奥被
+                        // 脚要停在**格的底边**，不是格的顶边。
                         //   直接摆到障碍【上方】——用户报的就是这个：「我顶问号/顶砖块/顶任何东西，
                         //   都会直接瞬移到障碍上方」。撞头顶时人必须**留在下方**。
                         newY = _yBest - _size.y;
@@ -912,7 +893,6 @@ namespace SuperMario.Module.Player
         /// 兜底脱困：碰撞解算完若包围盒**仍压在实心格上**，按"位移最小"的方向把人推出来。
         /// <para>
         /// <b>为什么必须有这一层</b>（用户实测）："跳下来落地的瞬间会被卡到砖块里，然后一直往左传送"。
-        /// 根因不是解算方向写错，而是**人先被塞进了实心格**：一旦人在格子里，X 轴解算每帧都会
         /// 把他往同一侧甩一次 ⇒ 看起来就是"一直往左输送"。所以这里保证一个不变式：
         /// <b>MoveAndCollide 结束时，包围盒绝不与实心格相交</b>。
         /// </para>
@@ -967,18 +947,17 @@ namespace SuperMario.Module.Player
 
         // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
         //
-        // 原先这里有一个私有迭代器 `Overlap`（`yield return new Vector2Int(x,y)`），
         // 它与 ItemModule / FireballModule / EnemyModule 里那三份**逐字相同** ⇒ 已下沉为引擎
         // `CloverEngine.GridUtil`（出处见 `Runtime/Core/GridUtil.cs` 文件头，它逐字复刻了原口径：
         // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
         // 连那个 `- 0.0001f` 收边量都保留为 `GridUtil.EdgeEpsilon`）。
         //
-        // ⛔ 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器，每次调用都分配
+        // 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器，每次调用都分配
         //    （状态机 + 装箱枚举器），而这四处都是**每帧**跑的碰撞查询。`ForEach` 只有在
-        //    "委托已缓存"时才不分配 —— 引擎文件头 ★ GC 写明「方法组写法在 Unity 的 C# 9 下
+        //    "委托已缓存"时才不分配 —— 引擎文件头 GC 写明「方法组写法在 Unity 的 C# 9 下
         //    每次转换也分配一个委托」⇒ 下面四个委托都**存进字段**。
         //
-        // ⛔ 算法本身一字未动（用多大半径、几点采样、撞墙是停还是滑 = 玩法手感，引擎明确不管，
+        // 算法本身一字未动（用多大半径、几点采样、撞墙是停还是滑 = 玩法手感，引擎明确不管，
         //    见 Runtime/Presentation/Map.cs:14-15）：仍是逐轴解算、仍是"命中第一格就停"，
         //    只是"怎么枚举格"从自写迭代器换成引擎能力。
         //
@@ -1010,17 +989,14 @@ namespace SuperMario.Module.Player
         private Action<int, int> _onScanHead;
 
         /// <summary>
-        /// X 轴碰撞解算的逐格回调。口径与原来的 `foreach` + `Overlap` 迭代器逐字一致：
-        /// ① 命中第一格即停（`_xHit` 复刻原来的 `break`；引擎 ForEach 无早退，所以用守卫挡后续格）；
         /// ② 移动平台格不挡横移。
         /// </summary>
         private void OnScanX(int tx, int ty)
         {
             if (_xHit) return;                                   // = 原 `break`（一帧内只解一次）
             if (!_level.IsSolidTile(tx, ty)) return;
-            // ★ 移动平台格【不挡横移】：台面只有半格厚，原版里人是从侧面走进/跳上去的，
+            // 移动平台格【不挡横移】：台面只有半格厚，原版里人是从侧面走进/跳上去的，
             //   不是被一堵隐形墙拦住（那一格只是"格子里有台面"的近似登记，见 `Platform.RegisterCells`）。
-            //   用户 2026-09-19 实测症状：「跳不上去移动的平台」—— 根因就是这里把整格当墙。
             if (_level.TryGetCarrierTop(tx, ty, out _)) return;
             _xNewX = _vel.x > 0f ? tx - _size.x * 0.5f : tx + 1f + _size.x * 0.5f;
             _xHit = true;
@@ -1035,9 +1011,8 @@ namespace SuperMario.Module.Player
             if (!_level.IsSolidTile(tx, ty)) return;
             _yAnyOverlap = true;
 
-            // ★ 移动平台：落点取台面的【真实】顶部（小数），不是"这一格的顶边"。
+            // 移动平台：落点取台面的【真实】顶部（小数），不是"这一格的顶边"。
             //
-            // 踩过的坑（P1-9「上行托着马里奥平移」）：用格顶边的话，平台上升时
             // 台面高度在玩家眼里恒为整数 —— 平台先从马里奥身上穿过去，跨格那一瞬间
             // 再把他弹起来一格，看着像"被顶了一下"而不是"被托着走"。
             // 登记/查询见 ILevel.SetCarrier / TryGetCarrierTop。
@@ -1046,9 +1021,7 @@ namespace SuperMario.Module.Player
 
             if (_vel.y > 0f)
             {
-                // ★ 移动平台**不算顶棚**：半格厚的台面，人可以贴着它下面跳上去、从它中间穿过
-                //   （原版就是"跳上去"这条路；整格登记会让人在台面下方被一堵隐形天花板顶回来，
-                //   用户 2026-09-19 实测：「跳不上去移动的平台」）。
+                // 移动平台**不算顶棚**：半格厚的台面，人可以贴着它下面跳上去、从它中间穿过
                 if (isCarrier) return;
 
                 // 上升：只有"解算前头顶还在这一格底边之下"的格子才算顶棚。
@@ -1061,7 +1034,7 @@ namespace SuperMario.Module.Player
             {
                 // 下落：只有"解算前脚底已经在这一格顶面之上"的格子才算落点。
                 //
-                // ★ 移动平台：台面每帧都在动，拿"上一帧脚底 ≥ 台面顶"硬卡会漏判（台面上升时把人漏掉）
+                // 移动平台：台面每帧都在动，拿"上一帧脚底 ≥ 台面顶"硬卡会漏判（台面上升时把人漏掉）
                 //   —— 但也**不能无条件吸附**：那样台面从人腰上扫过会把人生生拽上去
                 //   （用户实测「会被弹开」）。所以用"一帧内台面能升多少"当带宽（见
                 //   `GameConst.PlatformCatchBand` 的推导）：脚底离台面顶 ≤ 0.2 格 ⇒ 托住/落上去；
@@ -1084,9 +1057,8 @@ namespace SuperMario.Module.Player
         {
             if (!_level.IsSolidTile(tx, ty)) return;
 
-            // ★ 移动平台（载具）格要单独处理 —— **站在台面上不算"嵌进实心格"**。
+            // 移动平台（载具）格要单独处理 —— **站在台面上不算"嵌进实心格"**。
             //
-            // 踩过的坑（用户实测 2026-09-19：「上下移动的台阶站不上去，会被弹开」+
             // 「上下的不知道为什么会混在一起」，同局日志 23:11:22/25 连出
             // `[Warn] 碰撞兜底脱困 4 次仍有重叠`）：平台登记的是**整格实心**
             // （格底边比台面真实顶面低最多 1 格，见 `Platform.RegisterCells`），
@@ -1094,8 +1066,6 @@ namespace SuperMario.Module.Player
             // 每帧都判"嵌格"，按最小位移把人推到**格子的顶边**（= 台面以上 0.4 格）；
             // 下一帧台面又升上来、Y 解算再把人按回 `carrierTop` ⇒
             // **弹起→按回→弹起** 的死循环（观感就是"站不上去、被弹开"，而且每帧都报重叠）。
-            //
-            // 判据（2026-09-19 二次修正）：移动平台格**一律跳过**。
             //
             // 第一版是"脚底在台面顶面之上就跳过、否则往台面顶推" —— 那会把人从台面**下面**
             // 顶到台面上去（人贴着台面下方跳过去会被拽上来）。既然台面是"半格厚、可从下方穿过、

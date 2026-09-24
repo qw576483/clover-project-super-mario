@@ -50,13 +50,10 @@ namespace SuperMario.Module.CameraRig
 
             if (Camera == null)
             {
-                // ★ 取相机走**引擎门面** `Game.Camera.Main`，不再自己 `Camera.main`。
+                // 取相机走**引擎门面** `Game.Camera.Main`，不再自己 `Camera.main`。
                 //
-                // 踩过的坑（历史债 E-5）：更早是按对象名 `GameObject.Find("Main Camera")` ——
-                // "改个名 / 挪一层级就静默失效"，还会误命中同名的非相机对象。
                 // 后来改成 `Camera.main`（MainCamera 标签），但那是**绕过门面**的一次静态 tag 查找：
-                // 拿到的可能是场景里第二台相机 —— 于是"引擎震屏作用于 A、这里取景算的是 B"，
-                // 症状是画面与业务算的坐标对不上，而两处代码各自看都对（见 `ICameraManager.Main` 的 XML）。
+                // 拿到的可能是场景里第二台相机 —— 于是"引擎震屏作用于 A、这里取景算的是 B"。
                 //
                 // 未就绪时 `Main` 返回 **null**（引擎侧已限频留痕，同 key 5s 一条）⇒ 这里必须判空（G9）。
                 Camera = Game.Camera != null ? Game.Camera.Main : null;
@@ -69,8 +66,7 @@ namespace SuperMario.Module.CameraRig
                 }
             }
 
-            // ★ 这几项【每局都要重设】，不能只在"新建相机"时设一次。
-            // 踩过的坑：原来整段都塞在 `if (Camera == null)` 里，于是从 1-1 进 1-2 时
+            // 这几项【每局都要重设】，不能只在"新建相机"时设一次。
             // 相机是复用的、背景色还是上一关的天空蓝 —— 地下关变成"蓝底青砖"。
             Camera.orthographic = true;
             // 正交尺寸 = 半高（格）。16:9 下横向能看到 16/9*15 ≈ 26 格，
@@ -85,7 +81,7 @@ namespace SuperMario.Module.CameraRig
 
             _maxReachedX = float.MinValue;
             _locked = false;
-            // ★ 下一帧【直接归位】，不要平滑 —— 见 Tick 里的注释。
+            // 下一帧【直接归位】，不要平滑 —— 见 Tick 里的注释。
             _snap = true;
             Game.Logger.Info("Camera", $"相机就绪：正交尺寸 {Camera.orthographicSize}");
         }
@@ -100,7 +96,6 @@ namespace SuperMario.Module.CameraRig
         /// 屏幕抖动。**抖动的实现收敛到引擎** <see cref="ICameraManager.Shake"/>（强度随时间线性衰减 +
         /// 圆内随机偏移），本项目只保留"强度 → (时长, 最大偏移)"这一步换算：
         /// <list type="bullet">
-        /// <item>时长：旧实现里 <c>_shakeDecay</c> 从 1 起以 <b>3/秒</b> 递减到 ≤0 ⇒ 持续 <b>1/3 秒</b>；</item>
         /// <item>最大偏移：旧实现每轴 <c>Random.Range(-1,1) * _shake * 0.2</c> ⇒ 每轴极值 = <c>strength × 0.2</c>
         /// （引擎的 <c>intensity</c> 就是"最大偏移"，口径一致）。</item>
         /// </list>
@@ -116,10 +111,8 @@ namespace SuperMario.Module.CameraRig
             Game.Camera.Shake(ShakeSeconds, strength * ShakeOffsetScale);
         }
 
-        /// <summary>震屏持续时长（秒）。出处 = 旧实现：<c>_shakeDecay</c> 1 → 0，衰减速率 3/秒。</summary>
         private const float ShakeSeconds = 1f / 3f;
 
-        /// <summary>强度 → 最大偏移 的系数。出处 = 旧实现：每轴 <c>Random.Range(-1,1) * strength * 0.2</c>。</summary>
         private const float ShakeOffsetScale = 0.2f;
 
         public void Tick(float dt)
@@ -148,7 +141,6 @@ namespace SuperMario.Module.CameraRig
             // 中间为玩法区。所以把屏幕【底边】对准地面底边，地面就自然坐在画面最下方，
             // 下方不会露出多余的空蓝天，顶部也刚好空出约 2 行给 HUD。
             //
-            // 踩过的坑：原先写的是 groundY + orthoSize * 0.35，把相机抬得偏高 ——
             // 地面被顶到画面 2/3 处，下方露出近 3 格的空白蓝天，顶部的云又正好压在
             // HUD 的 WORLD / TIME 文字上，看着像"UI 和场景打架"，其实是取景偏了。
             var groundY = _level.GroundTopY;
@@ -162,9 +154,8 @@ namespace SuperMario.Module.CameraRig
 
             var want = new Vector3(camX, camY, -10f);
 
-            // ★ 进关第一帧【直接归位】。
+            // 进关第一帧【直接归位】。
             //
-            // 踩过的坑（症状："游戏开始的时候画面从别的地方甩过来"）：相机对象是场景里的
             // Main Camera，进关时它还停在【上一次的位置】（编辑器里的视角 / 上一关的城堡门口 /
             // 菜单），而这里每帧只用平滑系数往目标位置靠 —— 于是开局那零点几秒，画面是从别处
             // 一路"飞"到马里奥身上的。过场期间（旗杆、结算）才需要平滑跟随；开局需要的是"就在那儿"。
@@ -178,15 +169,14 @@ namespace SuperMario.Module.CameraRig
 
             Camera.transform.position = pos;
 
-            // ★ 让引擎的震屏围绕【本帧刚写下的机位】发生，而不是围绕它自己缓存的旧基准。
+            // 让引擎的震屏围绕【本帧刚写下的机位】发生，而不是围绕它自己缓存的旧基准。
             //
             // 引擎 `CameraManager` 把"基准位置"缓存在 `_basePos` 里，**只在 `_posInited == false` 那一帧**
             // 重新读相机当前位置（`Follow` / `Unfollow` 会把 `_posInited` 置回 false），
             // 之后震屏写的是 `_basePos + 偏移`（`Runtime/Presentation/Camera.cs` 的 Tick）。
             // 本项目不走 `Follow`（取景规则是"永不后退 + 中偏左推进"，引擎的等速跟随表达不了），
             // ⇒ 不刷新基准的话，第一次震屏会把镜头瞬移到"引擎首帧那台相机的位置"（菜单/上一关的机位）。
-            // `Unfollow()` 只写两个字段（`_target = null` / `_posInited = false`），每帧调用的代价可忽略；
-            // 不这么做就只能自己再实现一套震屏 —— 那正是本片要消除的重复实现。
+            // `Unfollow()` 只写两个字段（`_target = null` / `_posInited = false`），每帧调用的代价可忽略。
             if (Game.Camera != null) Game.Camera.Unfollow();
         }
 

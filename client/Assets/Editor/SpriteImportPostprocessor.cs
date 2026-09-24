@@ -7,7 +7,6 @@ namespace SuperMario.EditorTools
     /// 精灵导入配置。放在 AssetPostprocessor 里，Art 只要把 PNG 丢进 Resources/Sprites 就会自动配好。
     /// <para>
     /// <b>为什么不用手动在 Inspector 里设</b>：这批素材有 900 多张，手设必漏；
-    /// 而漏设的症状是"某几张图糊了"或"人物浮在半空"，非常难查。用后处理器则天然一致。
     /// </para>
     /// <para>
     /// <b>三条关键设置及其后果</b>：

@@ -7,8 +7,7 @@ namespace SuperMario.Core
     /// <summary>
     /// AI 取证产物目录（截图）解析 —— **全项目唯一来源**。
     /// <para>
-    /// ⛔ <b>证据不许落工程树</b>（引擎 skill 的规定：一次性产物只放 <c>&lt;项目根&gt;/.ai-tmp/</c>，
-    /// 截图放 <c>&lt;项目根&gt;/.ai-tmp/screenshots/</c>）。本项目原先有两处写死在工程内的输出目录
+    /// <b>证据不许落工程树</b>（引擎 skill 的规定：一次性产物只放 <c>&lt;项目根&gt;/.ai-tmp/</c>，
     /// —— <c>Editor/SmokeScreenshots.cs</c> 的 <c>_smb_work/shots</c> 与
     /// <c>Tests/PlayMode/SmokeTests.cs</c> 的 <c>_smb_work/shots</c> —— 跑一次就在工程树里留一堆 png。
     /// </para>

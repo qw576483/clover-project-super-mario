@@ -187,10 +187,9 @@ namespace SuperMario.Module.Gameplay
                     $"侧向管口：xMax={_player.Bounds.xMax:F2} ≥ {_level.SideExitFaceX}（脚下 y={feet.y:F1}）→ 下一段");
                 return;
             }
-            // ⚠️ 这里**不许**在"没走到管口"时提前 return：1-2 主关现在**同时**有侧向管口（通地表段）
+            // 这里**不许**在"没走到管口"时提前 return：1-2 主关现在**同时**有侧向管口（通地表段）
             // 和一根通往金币房的下管（T x=100..101），而这段代码在"进密室"判定**之前**。
             // 早先写成 `if (HasSideExit) { if (不满足) return; ... }`，站在金币房那根管顶按 ↓ 毫无反应
-            // —— 实测（2026-09-18 21:35）：`PROBE key DownArrow down` 有、`[Pipe] 进管` 一条都没有，
             // 12-10「1-2 秘密金币房」因此变成**不可达**。改成"只在实际触发时才 return"。
 
             // 只有 1-1 与 1-2 各有一根通往密室的管子（1-2 的是 T x=100..101 那根 2x3 Down）。
@@ -228,7 +227,7 @@ namespace SuperMario.Module.Gameplay
             ReachedFlag = true;
             _score.Add(GameConst.ScoreFlag);
             // 抓杆那笔分要**在抓杆处**冒出来（用户点名要的表现）。
-            // ⚠️ 位置取马里奥：原版 clone 的旗杆**压根不加分**（`MarioReachFlagPole()` 只停表 + 滑杆），
+            // 位置取马里奥：原版 clone 的旗杆**压根不加分**（`MarioReachFlagPole()` 只停表 + 滑杆），
             // 所以这条没有 clone 位置可抄；照"分数冒在事件发生对象上"的惯例取马里奥本身。
             _items.SpawnScoreText(GameConst.ScoreFlag, _player.Bounds.center);
             _audio.PlaySfx(Sfx.Flagpole);
@@ -242,7 +241,6 @@ namespace SuperMario.Module.Gameplay
             if (_player.Power != PowerState.Fire) return;
             if (!_player.Alive || _player.Busy) return;
             // 发射键 = W（用户指定）。
-            // 原先绑的是 LeftCtrl —— 那个键在键盘上离方向键很远、也没有任何提示，
             // 实测表现就是"有火球但不知道怎么发"。W 和方向键同手可及，且本项目
             // 用不到"向上"（原版 SMB 也没有向上走），不会和移动冲突。
             if (Game.Input == null || !Game.Input.GetKeyDown(GameKey.W)) return;
@@ -258,11 +256,10 @@ namespace SuperMario.Module.Gameplay
             var block = _blocks.At(hit.Value);
             if (block == null) return;
 
-            // ⛔ 这里【不要】再写"顶死砖上的敌人 / 收走砖上的金币"那两条规则 ——
+            // 这里【不要】再写"顶死砖上的敌人 / 收走砖上的金币"那两条规则 ——
             //    它们已经在 `Block.HitFromBelow`（`BlockModule.cs`）里实现了，那里连 clone 出处都有：
             //      · 敌人 = `RegularBrickBlock.cs:31-34` / `_common/CollectibleBlock.cs:38-46`
             //      · 金币 = `RegularBrickBlock.cs:36-40`（在砖上方 2 格弹出金币动画 + 飘分 + 音效 + 计币）
-            //    踩过的坑（我自己踩的，2026-09-20）：在这里又写了一套粗的（直接 `Collect()` 那枚金币），
             //    结果 **抢在 Block 之前** 把它标成 Taken ⇒ Block 那边 `if (it.Taken) continue;` 整段跳过
             //    ⇒ 金币"直接消失、没有弹出动画也没有飘分"（用户原话）。**同一件事只能有一处实现。**
             block.HitFromBelow(_player.Power != PowerState.Small);
@@ -297,16 +294,13 @@ namespace SuperMario.Module.Gameplay
                 // 用中心而不是"完全在敌人上方"，是为了让擦边踩也能成立 ——
                 // 严格判定会让原版那种"贴着边踩下去"的操作失效。
                 //
-                // ★ 后半条"上一帧脚底在敌人顶面之上"是**从上面下来**的兜底：单帧最大下落 0.4 格
+                // 后半条"上一帧脚底在敌人顶面之上"是**从上面下来**的兜底：单帧最大下落 0.4 格
                 //   （`MaxFallSpeed` 24 格/秒 ÷ 60 帧），快速下落时一帧就可能从"还没接触"直接落进敌人身体里，
                 //   只看当前帧的脚底位置会把它判成"侧面撞" ⇒ **明明踩到了却受伤**。
                 //   用户实测的原话：「你的怪物是不是碰撞太严苛了…只要在上面差不多就能踩到」。
                 //   判据用"上一帧脚底 ≥ 敌人顶面"（不含魔数容差）：上一帧人还在敌人头顶之上，
                 //   这一帧才重叠 —— 那就是从上面下来的。
                 //
-                // ★ 还要再问一句"这个敌人可不可以踩"（`IEnemy.Stompable`）。
-                // 踩过的坑：食人花在原版里是**唯一踩不得**的敌人（跳上去照样受伤），
-                // 而这里原先只看几何形状 ⇒ 跳上去被当成"踩中"：白送 100 分、还把它按回管子里。
                 var cameFromAbove = _prevFeetY >= eb.yMax;
                 var stomping = _player.Velocity.y <= 0.1f
                                && (pb.y > eb.center.y || cameFromAbove)
@@ -315,16 +309,15 @@ namespace SuperMario.Module.Gameplay
                 if (stomping)
                 {
                     e.Stomp();
-                    // ★ 不在这里弹：见循环末尾的说明（弹跳会把 `Velocity.y` 抬成正值，
+                    // 不在这里弹：见循环末尾的说明（弹跳会把 `Velocity.y` 抬成正值，
                     //   从而污染**同帧**后面那只敌人的"是不是踩"判定）。
                     stompedAny = true;
                     AddKillScore("踩中敌人", e.Bounds.center);
                 }
                 else
                 {
-                    // ★ 先问敌人："这次侧面接触你自己处理掉了吗？"
+                    // 先问敌人："这次侧面接触你自己处理掉了吗？"
                     //
-                    // 踩过的坑（症状：碰到【缩进壳里静止的乌龟】照样掉血）：这里原先无条件
                     // TakeDamage()，而 Koopa.TouchFromSide() 的语义恰恰是"静止的壳被碰 = 踢出去，
                     // 不该伤马里奥" —— 那个方法写好了却【从来没有人调】（又是"定义了没接线"）。
                     if (e.TouchFromSide()) continue;
@@ -338,15 +331,12 @@ namespace SuperMario.Module.Gameplay
                 }
             }
 
-            // ★★★ 踩敌的弹跳必须在**整个敌人循环跑完之后**再给 —— 不能在循环中间给。
+            // 踩敌的弹跳必须在**整个敌人循环跑完之后**再给 —— 不能在循环中间给。
             //
-            // 踩过的坑（用户实测 2026-09-19）：「1-2 两个板栗并排走，我踩了第二个，还是会碰第一个死！」
-            //「那两个乌龟也是」。根因是**同帧两个敌人互相污染**：
             //   `BounceAfterStomp()` 会把竖直速度设成 +15（向上），而本循环判"是不是踩"的第一条判据
             //   就是 `Velocity.y <= 0.1`（在下落中）—— 于是循环里**排在后面**的那只敌人立刻被算成
             //   "上升中侧撞" ⇒ `TakeDamage()`（小马里奥 = 直接死）。
             //   马里奥横跨两只敌人接缝落下时，一帧内必然同时重叠两只 ⇒ 稳定复现。
-            // 日志抓到的现行（同一毫秒两条，见 `Logs/2026-09-19.log`）：
             //   `22:39:03.615 [Gameplay] 踩中敌人，+100（连击 1）` + `[Player] 受伤降级 → Small`
             //   `22:39:49.630 [Gameplay] 踩中敌人，+100` + `.631 [Player] 受伤降级 → Small`
             // 挪到循环之后：一帧内重叠的敌人**都按"从上面踩"判**（原版就是"一脚踩死并排两只"），
@@ -358,7 +348,6 @@ namespace SuperMario.Module.Gameplay
         /// <summary>
         /// 被踢出去的壳撞到别的敌人 ⇒ 把对方撞飞（原版规则），壳自己继续滑。
         /// <para>
-        /// 踩过的坑（症状：壳从敌人身上穿过去，什么都不发生）：<c>IMovingShell</c> 接口
         /// 与 <c>Koopa.IsMovingShell</c> 早就写好了，接口注释还写着"由玩法层查询"，
         /// 但<b>全项目没有任何调用者</b> —— 典型的"定义了没接线"，而且零报错。
         /// </para>
@@ -434,8 +423,7 @@ namespace SuperMario.Module.Gameplay
 
                 switch (it.Content)
                 {
-                    // ★ 静置金币（金币房里那 19 枚、1-2 空中那些）。
-                    // 踩过的坑：这个 case 原来是【漏的】—— 吃到金币时走到 it.Collect()，
+                    // 静置金币（金币房里那 19 枚、1-2 空中那些）。
                     // 金币消失、**分数与金币数都不动**（"吃了币但没涨"），而且零报错。
                     // 金币房的意义就是吃币，所以这条必须在。
                     // 它**不飘字**：原版静置金币走的是无位置的 `AddCoin()`（clone `Coin.cs`），
@@ -449,7 +437,7 @@ namespace SuperMario.Module.Gameplay
                     case BlockContent.Mushroom:
                         _player.Grow();
                         _score.Add(GameConst.ScorePowerup);
-                        // ★ 那行 1000 飘在**马里奥身上**，不是道具上 —— 出处 clone
+                        // 那行 1000 飘在**马里奥身上**，不是道具上 —— 出处 clone
                         // `LevelManager.cs:200-260`：`MarioPowerUp()` 是
                         // `AddScore(powerupBonus, mario.transform.position)`（吃药 / 吃花 / 吃星三条同款）。
                         _items.SpawnScoreText(GameConst.ScorePowerup, _player.Bounds.center);
@@ -492,7 +480,6 @@ namespace SuperMario.Module.Gameplay
                     // `AddScore(enemy.fireballBonus, enemy.gameObject.transform.position)`。
                     _items.SpawnScoreText(GameConst.ScoreStomp, e.Bounds.center);
                     fb.Explode();
-                    // 火球杀敌是"看得见的事件"，但原先一条日志都没有 —— 验收时无法区分
                     // "火球打中了"和"火球飞过去炸在墙上"。这里补一条（每次击杀一条，不刷屏）。
                     var who = e is Component c ? c.gameObject.name : e.GetType().Name;
                     Game.Logger.Info("Gameplay", $"火球击中 {who}（x={e.Bounds.center.x:F2} y={e.Bounds.center.y:F2}）→ 翻飞，+{GameConst.ScoreStomp}");

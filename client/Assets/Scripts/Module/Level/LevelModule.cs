@@ -142,7 +142,6 @@ namespace SuperMario.Module.Level
         /// <summary>
         /// 马里奥能"碰到"旗杆的 x —— 即旗杆所在格的**左边缘**（不是旗杆中心）。
         /// <para>
-        /// 踩过的坑（症状：这一关永远无法通关）：旗杆立在自己的**实心基座方块**上，
         /// 马里奥向右跑会先被基座挡住，右边缘最多只能到基座左边缘（= 旗杆格左边缘）。
         /// 而触发判定若用旗杆中心 <see cref="FlagpoleX"/>（比左边缘靠右半格），
         /// 就永远差那半格 —— 实测他卡在 x=183.6（右边缘 183.975）不动整整 11 秒，
@@ -188,14 +187,13 @@ namespace SuperMario.Module.Level
         /// <summary>
         /// 空间事实面（实心位图 + 移动托台顶高 + 世界边界）—— **收敛到引擎 <see cref="TileWorld"/>**。
         /// <para>
-        /// 出处（引擎侧）：<c>Runtime/Presentation/TileWorld.cs</c> —— 它的实现就是从这里原来的
         /// 181-215 行（<c>HashSet&lt;int&gt;</c> 位图 + <c>Dictionary&lt;int,float&gt;</c> 托台 + <c>Key(tx,ty)</c>）
         /// 逐字下沉的。收下它是为了消掉那套 32 位键：`(tx &lt;&lt; 16) ^ (ty + 512)` 在 |tx| ≥ 2^15
         /// 或 ty 超出 [-512, 65022] 时会**键碰撞** ⇒ 误判实心（"明明没有砖却撞上了"，且不报错）。
         /// 引擎换成了 64 位双射键。
         /// </para>
         /// <para>
-        /// ⛔ 边界口径由引擎 <c>Runtime/Presentation/Map.cs:14-15</c> 划死：本类**只搬"空间事实"**
+        /// 边界口径由引擎 <c>Runtime/Presentation/Map.cs:14-15</c> 划死：本类**只搬"空间事实"**
         /// （这一格实不实心 / 托台顶面在哪 / 世界到哪为止），**不搬位移解算** ——
         /// 「输入 → 位移 → 贴墙滑动」（用多大半径、几点采样、撞墙是停还是滑）属玩法手感，
         /// 留在 <c>PlayerActor</c> 与各实体自己的 <c>Update</c> 里。瓦片贴图绘制也留在本文件（<see cref="FinishBuild"/>）。
@@ -228,7 +226,7 @@ namespace SuperMario.Module.Level
         public void Build(LevelData data, Action onDone)
         {
             Data = data;
-            // ★ 池化取舍（本文件全部 4 处 `new GameObject` 都是同一个结论）：**不进对象池**。
+            // 池化取舍（本文件全部 4 处 `new GameObject` 都是同一个结论）：**不进对象池**。
             //   判据是"高频短命" —— 池化只在"同一类对象一局里反复生成/销毁"时才划算；
             //   这里 ① `[Level]` 根 / ② `Background` / ③ `Terrain` 各 1 个，
             //   ④ 瓦片每个 1 个 —— **生命周期都 = 一整关**（回菜单时随 `Clear()` 整体销毁），
@@ -236,7 +234,7 @@ namespace SuperMario.Module.Level
             //   真正高频短命的（火球 / 道具 / 砖块碎片）不在本文件，按各自模块评估。
             Root = new GameObject("[Level]");
 
-            // ★ 世界边界先给一次（**唯一来源 = TileWorld.SetBounds**）：
+            // 世界边界先给一次（**唯一来源 = TileWorld.SetBounds**）：
             //   · MinX  = 数据里最小的格 x（原版 1-1 是 -13，左侧那段预留延伸地面）；
             //   · MaxX  = 最大格 x + 1（格 (X,Y) 占世界 [X, X+1]，所以右边界要 +1）；
             //   · GroundTopY = ComputeGroundTop(data)（最厚那一层实心地形的上沿）。
@@ -252,10 +250,9 @@ namespace SuperMario.Module.Level
                 solidCount++;
             }
 
-            // ★ 旗杆位置：优先用关卡文件里声明的（`# flagpole <格x>`），没有才按公式推。
+            // 旗杆位置：优先用关卡文件里声明的（`# flagpole <格x>`），没有才按公式推。
             //
             // 为什么要有"声明的"这条路：公式是"距右边界 25.5 格"，那是从 **1-1** 反推的。
-            // 1-2 原来也走这条公式，结果算出 x=166.5 —— 而按原版真值，那里是地下段结尾的
             // 实心墙（墙 x=157..173,y=0..2）+ 侧向管；旗杆因此被插进墙里，过关时
             // 人被摆进实心墙、脚下还没地板（x=152..160 是空洞），直接掉出世界。
             // 原版 1-2 的旗杆在【地表段】（clone `World 1-2 - Castle Cut.unity`，Goal Post x=19），
@@ -330,7 +327,7 @@ namespace SuperMario.Module.Level
             // StageSession 会把它们换成可顶碎的 Brick 实体，所以这里必须跳过绘制，
             // 否则同一格会画两遍：一块永远拆不掉的地形砖压在上面。
             //
-            // ⚠️ 判据是 BrickTilesAsEntities（= 地下关 **且不是**管中密室）：金币房的青砖是房间的墙，
+            // 判据是 BrickTilesAsEntities（= 地下关 **且不是**管中密室）：金币房的青砖是房间的墙，
             // 它**不**转成实体（StageSession 那边同一个判据），所以这里必须照常绘制。
             var skipUndergroundBricks = StageContext.BrickTilesAsEntities;
 

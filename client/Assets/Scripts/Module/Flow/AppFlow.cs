@@ -59,7 +59,6 @@ namespace SuperMario.Module.Flow
         /// <summary>
         /// 管中过场的四种用途。它们共用同一个等待循环（<see cref="_warpWait"/> 计时 + <c>Player.Busy</c> 结束），
         /// 因为四者的"结束信号"完全一样（玩家的管中动作播完），**只有下一步不同** ——
-        /// 分成四份等待代码就必然漂移（谁忘了复位 <c>_warpWait</c> 谁就把流程卡死）。
         /// </summary>
         private enum WarpPhase
         {
@@ -144,7 +143,6 @@ namespace SuperMario.Module.Flow
                 ResPaths.PixelFont, ResPaths.Level11, ResPaths.Level12,
                 // 金币房（管中密室）的关卡文本：进管时要**同步**解析（StageSession.LoadLevelText），
                 // 而游戏正跑着，这时候没有"再去异步加载一次"的机会 —— 所以两关的密室都要预热
-                // （1-1 的 §3.2、1-2 的 §4.2）。
                 ResPaths.Level11Underground, ResPaths.Level12Underground,
                 // 1-2 的地表段：它是"关卡列表中紧跟在 1-2 地下段后面的一项"，
                 // 走侧向管口时流程会切过去 —— 那条路同样没有"再异步加载一次"的机会，所以也预热。
@@ -180,7 +178,7 @@ namespace SuperMario.Module.Flow
         /// <summary>
         /// Menu 场景加载完成后的收尾：清掉旧面板，再把菜单显示出来。
         /// <para>
-        /// ⚠️ **不能只写 <c>Game.Fsm.Transition(FlowState.Menu)</c>**：FSM 对"切到当前所在的同一个状态"
+        /// **不能只写 <c>Game.Fsm.Transition(FlowState.Menu)</c>**：FSM 对"切到当前所在的同一个状态"
         /// 是 **no-op**，而这一行前面刚 <c>CloseAll()</c> 把面板清掉了 ⇒ 结果是
         /// "菜单场景在、面板没了"的**空白标题屏**，而且**一条日志都没有**。
         /// 实测踩过：连续跑场景时（或任何"已经在 Menu 又触发一次回主菜单"的路径）第二次进菜单就变空白，
@@ -231,14 +229,11 @@ namespace SuperMario.Module.Flow
 
             // 新开一局 = 从第 1 关（1-1）开始，形态打回小马里奥
             // （原版就是"新开一局才归零"：`GameStateManager.cs:41-51 ConfigNewGame()` 里的 `marioSize = 0`。
-            //  这一句原先在 `EnterLoading` 里 —— 那里同时是"换段"的必经之路，会把交接好的形态擦掉，
-            //  所以搬到这个真正的"新一局"入口，见 EnterLoading 的说明）。
             StageContext.SetSpawnPower(null);
             SetLevel(0);
 
-            // ★ 先清掉可能还在跑的旧会话。
+            // 先清掉可能还在跑的旧会话。
             //
-            // 踩过的坑（本片实测）：原来这里直接切场景，不销毁旧会话 —— 若从"关卡进行中"再发一次
             // 开局（正常流程走不到，但选人屏/调试路径能走到），场景切换会销毁旧会话的 GameObject，
             // 而旧会话的模块还会被 Tick 一帧，于是抛
             // `SpriteRenderer has been destroyed but you are still trying to access it`
@@ -279,10 +274,10 @@ namespace SuperMario.Module.Flow
 
         /// <summary>
         /// 通关结算收尾停留（秒）：时间兑完分之后停多久才进下一关 / 结算屏。
-        /// <para>⛔ 这个 2.5 是**原来那句 `_resultTimer = 2.5f` 的值**，不是音乐长度 ——
+        /// <para> 这个 2.5 是**原来那句 `_resultTimer = 2.5f` 的值**，不是音乐长度 ——
         /// `IAudio` 目前没暴露 clip 时长；等暴露了就换成 `LevelComplete.wav` 的真实长度
         /// （原版 `Castle.cs:26 LoadNewLevel(sceneName, levelCompleteMusic.length)` 用的正是音乐长度）。</para>
-        /// <para>⚠️ 2026-09-20 起它**不再等于"音乐还要放多久"**：通关音乐已改到「时间倒计时开始」那一刻播
+        /// <para> 起它**不再等于"音乐还要放多久"**：通关音乐已改到「时间倒计时开始」那一刻播
         /// （见 <see cref="TickStage"/> 的结算段），而倒计时本身要跑 <c>TimeLeft × TallyInterval</c> 秒，
         /// 所以音乐早就放完了 —— 这里纯粹是收尾停留。</para>
         /// </summary>
@@ -290,7 +285,7 @@ namespace SuperMario.Module.Flow
 
         /// <summary>
         /// 通关结算里"每兑 1 个时间单位"的间隔（秒）。
-        /// <para>400 个单位 ≈ 8 秒。⚠️ 这个数是**观感口径、非 clone 出处**（clone 没有换分实现），
+        /// <para>400 个单位 ≈ 8 秒。这个数是**观感口径、非 clone 出处**（clone 没有换分实现），
         /// 与 <see cref="GameConst.ScorePerTime"/> 一起登记在「允许的差异」；嫌快/嫌慢只改这一个常量。</para>
         /// </summary>
         private const float TallyInterval = 0.02f;
@@ -355,7 +350,7 @@ namespace SuperMario.Module.Flow
             var silent = _silentSwap;
             _silentSwap = false;
             Game.Logger.Info("Flow", silent ? "→ Loading（同一关内换段：跳过入场卡）" : "→ Loading");
-            // ★ 入场卡期间【世界不跑】—— 这是"与原版同形"的关键，不是停机动画。
+            // 入场卡期间【世界不跑】—— 这是"与原版同形"的关键，不是停机动画。
             //
             // 原版那张卡是**另一个场景**：clone `Assets/Scripts/LevelManager.cs:407,433` 是
             // `LoadSceneDelay("Level Start Screen", …)` ⇒ **关卡场景在卡放完之后才加载**，
@@ -371,7 +366,7 @@ namespace SuperMario.Module.Flow
             // 实体 `Update` 拿到的 `dt` 变 0、2D 物理也不再步进；由 `ExitLoading` 在离开本状态时
             // 恢复成 1 —— 也就是 `→ Stage`（原版世界真正开始跑的那一帧）才恢复。
             //
-            // ⚠️ 冻住之后 `Time.time` / `Time.deltaTime` **都不再前进**，所以本状态里所有的等待
+            // 冻住之后 `Time.time` / `Time.deltaTime` **都不再前进**，所以本状态里所有的等待
             // 都必须走 unscaled 口径（引擎 Timer 的教训：`timeScale = 0` 时普通 `Timer.After` 永不触发）。
             Time.timeScale = 0f;
             _loadingStart = Time.unscaledTime;
@@ -382,9 +377,7 @@ namespace SuperMario.Module.Flow
             // 进关卡一律清掉落点覆盖：它只属于"管中密室"（见 StageContext.SpawnOverride）。
             // 不清的话，从密室出来、死亡重来或进下一关时都会沿用密室的落点。
             StageContext.SetSpawnOverride(null);
-            // ⚠️ 形态【不要】在这里清（这里原先有一句 `StageContext.SetSpawnPower(null)`）。
             //
-            // 2026-09-19 实测（本片，数值类判据）：那一句会**擦掉刚交接好的跨段形态** ——
             // `NextLevel()`（1-1 通关 → 1-2、1-2 地下段 → 地表段）是在
             // `Game.Fsm.Transition(FlowState.Loading)` **之前**设的，而 Transition 是**同步**调用
             // ⇒ EnterLoading 紧接着把它清成 null ⇒ 进 1-2 实测：
@@ -407,8 +400,7 @@ namespace SuperMario.Module.Flow
             //     （`LevelManager.cs:316 MarioRespawn`、`:306 MarioPowerDownCo`、`GameStateManager.cs:42`）。
             // 命数【必须当参数传】给读条屏：面板打开的时刻新会话还没 Build、StageContext 还是空的，
             // 面板自己读只会拿到默认值（死亡重来时就会把 ×1 显示成 ×3）。
-            // ⛔ 换段（silent）**不 open 这张卡**：卡上写的就是 "WORLD x-x / ×命数" ——
-            //   正是用户报的"黑屏的 1-2"（2026-09-20 09:36）。没有卡也就没有那层黑屏：
+            // 换段（silent）**不 open 这张卡**：卡上写的就是 "WORLD x-x / ×命数" ——
             //   这一段的耗时只剩"重建会话"的纯加载（实测 ~125 毫秒，见下面 Go() 的注释），
             //   观感是一次切镜，紧接着就是地表段自己的"从出管口升起"过场（`# pipe-rise`，原版同款）。
             //   注意 HUD 保持不变（两段都是 `1-2`），玩家不会觉得"又开了一关"。
@@ -419,9 +411,7 @@ namespace SuperMario.Module.Flow
 
             // 看门狗（**真实时间**）：兜住**整段 Loading**（地形 / 实体 / 玩家 / 装饰全都算）。
             //
-            // ★ 判据已按引擎契约修正（2026-09-24）：**判"回调真的没来"，不判"路径不存在"**。
             //   旧注释写的是"`LevelProps` 那个 5 秒看门狗在卡期间不会触发" —— 那个 5 秒看门狗
-            //   本身就建立在错前提上（"路径不存在时引擎不会回调"），已删除（见 `LevelProps.Build` 的说明）。
             //   引擎契约：`LoadAsset` **失败也会回调 null**（`Runtime/Core/Contracts.cs:1033/1042`；
             //   实现 `Runtime/Resource/ResourceManager.cs:305-343` + `ResourceBackend.cs:233-259`）
             //   ⇒ 资源缺失一律由回调里的 `sp == null` 报 Error；**本看门狗只负责引擎级故障**
@@ -429,10 +419,9 @@ namespace SuperMario.Module.Flow
             //   token 未变"，也就是"确实还有回调没来"，与"路径写不写错"无关。
             Game.Timer.AfterUnscaled(LoadingWatchdogSeconds, () =>
             {
-                // ★ 看门狗必须绑定"**这一次** Loading"。它是一次性定时器，12 秒后一定会响，
+                // 看门狗必须绑定"**这一次** Loading"。它是一次性定时器，12 秒后一定会响，
                 // 而只判 `fsm == Loading` 是不够的：若中途"死亡重来 / 换关"又进了一次 Loading，
                 // 上一局的看门狗就会在**新的** Loading 里响，把一次正常（才 1.5 秒）的加载报成"卡住"。
-                // 实测（2026-09-19 22:32:47，`flag` 场景之后玩家在 1-2 连死两次）：
                 // Loading#1 起于 22:32:35.654，它的看门狗在 22:32:47.664 命中 Loading#2（起于 22:32:46.151）
                 // ⇒ 误报一条 `[Error] 入场卡停留超过 12 秒仍未进关`，而 Loading#2 在 22:32:48.044 就 `→ Stage` 了。
                 // 这条误报会污染"每个场景窗口 [Error] = 0"的验收判据（见验收表 E-20 的消除记录）。
@@ -452,24 +441,22 @@ namespace SuperMario.Module.Flow
                     _slots[_currentPlayer].Lives);
 
                 // 【不要】在这里再 Spawn 一次玩家。
-                // 踩过的坑：这里曾有第二句 _session.Player.Spawn(...)，而 StageSession.Build
                 // 内部（由 SpawnPlayer 负责）**已经**生成过玩家了 —— 于是每局开局都生成两遍，
                 // 日志里 "马里奥已就位" 连打两条，出生点公式也在两个文件里各写了一份
                 // （MinWorldX + 3.5f）。Spawn 本身幂等所以画面看不出问题，
                 // 但"谁负责生成玩家"这件事一旦有两个答案，改出生点就必然会漏改一处。
                 // 职责归 StageSession：它在 Ready=true 之前生成，时机更靠前，也更安全。
                 //
-                // ★ 旗杆 / 城堡挂在【关卡根】下（不是场景根）：进管中密室时整关会被冻结
+                // 旗杆 / 城堡挂在【关卡根】下（不是场景根）：进管中密室时整关会被冻结
                 // （`StageSession.Hide` 关掉关卡根），挂在场景根上的话旗杆和城堡会留在画面上。
                 LevelProps.Build(_session.Level, _session.Level?.Root != null ? _session.Level.Root.transform : null, () =>
                 {
                     // 入场卡必须【看得见】再进关。
                     //
-                    // 踩过的坑：关卡是纯本地加载，实测从 "→ Loading" 到 "→ Stage" 只隔 125 毫秒
                     // —— 黑屏只闪一下，玩家读不到 "WORLD 1-1 / ×3"，观感是"硬切进关卡"。
                     // 原版这张卡要停约 2 秒。所以这里把"还差多久"补出来再切；
                     // 加载本身就慢的情况则不必再等（wait <= 0 直接进）。
-                    // ⚠️ 用 **unscaled** 口径量、也用 **unscaled** 定时器等：本状态把 timeScale 冻成 0
+                    // 用 **unscaled** 口径量、也用 **unscaled** 定时器等：本状态把 timeScale 冻成 0
                     // （见 EnterLoading），`Time.time` 不走、普通 `Timer.After` 也不会触发。
                     void Go()
                     {
@@ -535,13 +522,13 @@ namespace SuperMario.Module.Flow
 
             // 管中过场（沉进管子 / 顶出管子 / 走进管口）：这一段只等玩家动作做完，
             // 不推进关卡逻辑（时间、敌人、相机都停），做完才真正换场。
-            // ⚠️ "不推进关卡逻辑"这条对本段的食人花是**硬要求**：1-2 地表段的出管口那根管里就有花，
+            // "不推进关卡逻辑"这条对本段的食人花是**硬要求**：1-2 地表段的出管口那根管里就有花，
             //    原版在升起过场期间不会咬人（花的初相位是"缩在管里"、马里奥在 2 格内它不再伸出来），
             //    但停掉 Gameplay 是最硬的一层保险 —— 不管花的实现怎么改，过场期间都不做玩家×敌判定。
             if (_warpWait >= 0f)
             {
                 _warpWait -= dt;
-                // ⚠️ 升起过场（1-2 地表段开局）期间**相机必须照常归位**：
+                // 升起过场（1-2 地表段开局）期间**相机必须照常归位**：
                 // 这一段是刚 build 出来的（`StageSession.Build` 里的 `Camera.Setup` 只设背景与取景，
                 // 真正的"跟住玩家"发生在 `Camera.Tick`），而这一段又挡掉了下面所有 Tick ⇒
                 // 不补这一句，升起那 0.2 秒里相机停在上一段的取景上、画面是一片空白
@@ -570,9 +557,8 @@ namespace SuperMario.Module.Flow
                 return;
             }
 
-            // ★ 摸到旗杆就**停表** —— 原版 `MarioReachFlagPole()`（clone `LevelManager.cs:597`）
+            // 摸到旗杆就**停表** —— 原版 `MarioReachFlagPole()`（clone `LevelManager.cs:597`）
             //   第一句就是 `timerPaused = true;`。不停的话，滑杆 + 走城堡 + 结算这十几秒里倒计时照走，
-            //   会**吃掉本该换成分数的时间**：实测 2026-09-19 23:51 那次，开始结算时还剩 395 个单位，
             //   兑完只加了 18800 分（= 376 单位），差的 19 个正好 = 7.5 秒 ÷ 0.4 秒/单位（正常倒计时速率）。
             if (!active.Player.Busy && !active.Gameplay.ReachedFlag) active.Score.TickTime(dt);
             active.Gameplay.Tick(dt);
@@ -599,18 +585,13 @@ namespace SuperMario.Module.Flow
             // 旗杆流程走完 → ① 剩余时间换分 ② 通关音乐 ③ 进下一关 / 结算屏。
             if (active.Gameplay.ReachedFlag && !active.Player.Busy && _resultTimer < 0f)
             {
-                // ★ ① 时间换分（用户 2026-09-19 点名：「通关结算会不断把时间变成分数」）。
                 //   一帧兑 1 个单位（观感就是原版那种"哗哗往上跳"）、每单位 `GameConst.ScorePerTime` 分，
                 //   每兑一次响一声 `Sfx.Beep`（原版的 tick 音）。`TallyTimeUnit` **不会**触发 TimeUp。
                 if (!_tallyStarted)
                 {
                     _tallyStarted = true;
                     Game.Sound.StopBGM(0.2f);
-                    // ★ ② 通关音乐：**全项目只在这一处放，且只放这一次** —— 时机 =「时间倒计时开始」。
-                    //   用户 2026-09-20 点名：「通关音乐会播两次，时间倒计时开始时候要，结束那次不要」。
-                    //   原来另有两处会响：① 走进城堡那一刻（`PlayerActor.TickCastleWalk`）、
-                    //   ② 下面倒计时兑完那一刻。两处都已删除，只剩这一处（判据：全项目 `Sfx.LevelComplete`
-                    //   只有这一个播放点）。
+                    // ② 通关音乐：**全项目只在这一处放，且只放这一次** —— 时机 =「时间倒计时开始」。
                     active.Audio.PlaySfx(Sfx.LevelComplete);
                     Game.Logger.Info("Flow",
                         $"通关结算开始：剩余时间 {active.Score.TimeLeft} 个单位 × {GameConst.ScorePerTime} 分" +
@@ -618,8 +599,7 @@ namespace SuperMario.Module.Flow
                         $"停 BGM，播放通关音乐 {Sfx.LevelComplete}（只此一次），逐单位换分");
                 }
 
-                // ⚠️ 兑换节奏**按时间**、不按帧：一帧兑 1 个单位时"结算多久"会随帧率变 ——
-                //   实测（2026-09-19 23:48，编辑器窗口在后台）：帧率掉到 ~12fps，393 个单位跑了
+                // 兑换节奏**按时间**、不按帧：一帧兑 1 个单位时"结算多久"会随帧率变 ——
                 //   33 秒还没兑完。改成按 `dt` 累积 ⇒ 前台/后台、高帧/低帧都是同一段时长。
                 _tallyAcc += dt;
                 var more = active.Score.TimeLeft > 0;
@@ -631,7 +611,6 @@ namespace SuperMario.Module.Flow
                 }
                 if (more) return;      // 还在跳：这一帧别往下走（E-20 的教训：分支里该 return 就 return）
 
-                // ⛔ 这里**不放**通关音乐 —— 它已经在上面「倒计时开始」那一刻放过了（用户 2026-09-20 点名）。
                 //   这一段只负责"停留一会再进下一关 / 结算屏"。
                 Game.Logger.Info("Flow",
                     $"通关结算完成：分 {active.Score.Points}、时间已归零；" +
@@ -649,7 +628,6 @@ namespace SuperMario.Module.Flow
                     {
                         NextLevel();
 
-                        // ★ 这一帧必须【立刻结束 TickStage】—— E-20 的根因就是这里少了这个 return。
                         //
                         // NextLevel() → DisposeSessions() → StageSession.Dispose() 会把
                         // `Level / Player / Score / Camera / Gameplay` **逐个置 null**（见 StageSession.cs
@@ -657,7 +635,6 @@ namespace SuperMario.Module.Flow
                         // 取到的旧引用**。少了这个 return，执行就会继续往下走到本方法末段的
                         // `active.Gameplay.PendingDeath` ⇒ NullReferenceException，被引擎的状态机吞成
                         //   `[Error] [Fsm] OnTick error [Loading]: ... AppFlow.TickStage`
-                        // 症状就是"**切段那一帧必现，但流程看起来没坏**"（同一帧已经切到 Loading 了）。
                         //
                         // 同一个动作在下面「侧向管口 → 1-2 地表段」（第 374 行 `NextLevel(); return;`）
                         // 本来就有 return，只有这一处漏了 —— 所以只有「1-1 通关 → 1-2」那条路径会抛。
@@ -720,7 +697,7 @@ namespace SuperMario.Module.Flow
         {
             _warpWait = -1f;
 
-            // ★ 先把这一关的传送管数据取出来：下面 SetLevel 会把 StageContext.LevelPath 换成密室路径。
+            // 先把这一关的传送管数据取出来：下面 SetLevel 会把 StageContext.LevelPath 换成密室路径。
             var warp = Warp;
 
             // 主关卡只冻结不销毁：出管回主关卡时，顶碎的砖、踩掉的敌人、位置都还在。
@@ -774,7 +751,7 @@ namespace SuperMario.Module.Flow
             StageContext.SetLevel(LevelPaths[_levelIndex], LevelLabels[_levelIndex], LevelUnderground[_levelIndex]);
             StageContext.SetSpawnOverride(null);
 
-            // ★ 出管位置必须问**主关卡**那一套（此刻 StageContext.LevelPath 还是密室路径，
+            // 出管位置必须问**主关卡**那一套（此刻 StageContext.LevelPath 还是密室路径，
             //   虽然两者映射到同一套，但显式按主关卡取，将来多一个密室也不会错）。
             var top = PipeWarpTable.For(LevelPaths[_levelIndex]).ReturnPipeTopFeet;
 
@@ -829,33 +806,30 @@ namespace SuperMario.Module.Flow
         /// 但**表现上不能出现那张卡**。
         /// </para>
         /// <para>
-        /// 出处（用户实测 2026-09-20 09:36）：「1-2 地下进管道，出来以后……为什么还会调用一次
         /// 黑屏的 1-2？」日志现场：`[Pipe] 侧向管口 → 1-2 地表段` 后紧跟
         /// `[Flow] 关卡通过 → 进入 WORLD 1-2` + `→ Loading` —— 走的就是"关卡通过"那条路。
         /// </para>
         /// </summary>
         private void NextLevel(bool silent = false)
         {
-            // ★ _resultTimer 必须重置成 -1：它此刻是 0（就是这次触发的），
+            // _resultTimer 必须重置成 -1：它此刻是 0（就是这次触发的），
             // 不复位的话下一关的 TickStage 每帧都会判定"通关倒计时到点"，反复重复跳关。
             _resultTimer = -1f;
 
-            // ★ 形态要在【销毁会话之前】读出来：DisposeSessions 会把 Player 置 null。
+            // 形态要在【销毁会话之前】读出来：DisposeSessions 会把 Player 置 null。
             // 原版同一只马里奥跨段（1-1 → 1-2 地下段 → 地表段），形态（大 / 火）一路保留；
             // 早先每一段都是一个新会话 ⇒ 每一次切段都悄悄打回小马里奥（登记项 E-13）。
             var carry = _session != null && _session.Player != null
                 ? _session.Player.Power
                 : PowerState.Small;
 
-            // ★★★ 换关必须把**这一段已经打到现在的**分数 / 金币 / 命数写回玩家槽位。
+            // 换关必须把**这一段已经打到现在的**分数 / 金币 / 命数写回玩家槽位。
             //
-            // 踩过的坑（用户实测，2026-09-19）：「第一关我明明记得我死了一次，第二关又三条命了」
-            // 与「关卡踩旗子不加分」是**同一个根因** —— `EnterLoading` 建新会话时用的是
             // `_slots[_currentPlayer]` 里的值，而整个工程只有**死亡路径**（`HandleDeathResolved`）写过这份值，
             // 换关路径从来没写 ⇒ 每次换关都把三项退回**开局值**：
             // 1-1 打到 5000 分 / 2 条命 → 进 1-2 时 `Score.Restore(0, 0, 3)` ⇒ HUD 变成 0 分 ×3
             // （旗杆那 5000 分正是这么"没了"的，看起来就像"踩旗子不加分"）。
-            // ⛔ 顺序也不能反：必须在 `DisposeSessions()`（把 `_session` 拆掉）**之前**读。
+            // 顺序也不能反：必须在 `DisposeSessions()`（把 `_session` 拆掉）**之前**读。
             if (_session != null && _session.Score != null)
             {
                 _slots[_currentPlayer].Points = _session.Score.Points;
@@ -907,8 +881,7 @@ namespace SuperMario.Module.Flow
         private void OnTimeUp()
         {
             if (_session == null) return;
-            // ★ 必须走 Gameplay 的强制死亡入口。
-            // 踩过的坑：这里原来只调 _session.Player.Kill() —— 玩家确实死了，但死亡结算靠
+            // 必须走 Gameplay 的强制死亡入口。
             // GameplayModule.PendingDeath 触发，而 Kill() 不置这个标记。于是时间到 0 之后
             // 画面【永远卡在死的那一帧】：不重来、也不 GameOver。用户原话："时间为 0 时候也不会重来"。
             _session.Gameplay.KillPlayerForcibly();
@@ -924,7 +897,6 @@ namespace SuperMario.Module.Flow
 
             var hasLife = _session.Score.LoseLife();
 
-            // 扣完命【再】写回槽位。顺序反了的话，入场卡上的"×命数"会显示扣命前的旧值。
             _slots[_currentPlayer].Points = _session.Score.Points;
             _slots[_currentPlayer].Coins = _session.Score.Coins;
             _slots[_currentPlayer].Lives = _session.Score.Lives;
@@ -949,7 +921,6 @@ namespace SuperMario.Module.Flow
         /// <summary>
         /// 重新进关：**先过一遍入场卡（WORLD x-x / ×命数），再进关卡** —— 原版的死亡重来就是这个节奏。
         /// <para>
-        /// 踩过的坑：原先用 <c>_session.RestartAfterDeath()</c> 原地复位，跳过了那张卡，
         /// 玩家看到的是"死完直接瞬移回起点"，和原版完全不像（用户原话："重来时候不是先会跳到
         /// 人数界面吗？然后再跳到游戏里？"）。
         /// </para>
@@ -962,7 +933,6 @@ namespace SuperMario.Module.Flow
         private void ReloadStageWithIntro()
         {
             // 死亡重来 / 换手：形态打回小马里奥（原版 `LevelManager.cs:312-339 MarioRespawn` 里那句
-            // `marioSize = 0`；这一句原先在 `EnterLoading` 里，搬到这个"重开一局"的入口 —— 见那里的说明）。
             StageContext.SetSpawnPower(null);
             Game.UI.CloseAll();
             Game.Sound.StopAll();
@@ -1004,7 +974,6 @@ namespace SuperMario.Module.Flow
         private void EnterPause()
         {
             Game.Logger.Info("Flow", "→ Pause");
-            // 【不要】在这里 Lock 输入。踩过的坑：原先锁了输入，结果暂停面板上的
             // "继续 (ESC)" 根本按不动 —— 因为 ESC 要通过 Game.Input 读，而 Lock 正是把它关掉。
             // 不锁也不会让马里奥乱跑：暂停期间状态机停在 Pause，TickStage 压根不执行，
             // 没有任何模块在读游戏输入；面板自身的点击走 EventSystem，不受影响。
@@ -1063,9 +1032,8 @@ namespace SuperMario.Module.Flow
             Time.timeScale = 0f;
             Game.UI.Open<ResultPanel>();
 
-            // ★ 这里【不能】Game.Input.Lock()。
+            // 这里【不能】Game.Input.Lock()。
             //
-            // 踩过的坑：原来锁了输入，而 TickResult 又用 Game.Input.GetKeyDown(Space) 等按键 ——
             // IsLocked 会让 GetKeyDown 直接返回 false，于是结算面板【永远按不动】，和 GameOver
             // 的卡死是同一类问题（在冻结状态下用了被冻结的东西）。
             // 冻结世界靠 timeScale=0 就够了：Result 状态下 TickStage 根本不会被调用。
@@ -1103,14 +1071,12 @@ namespace SuperMario.Module.Flow
             Game.Sound.PlaySFX(Sfx.GameOver);
             Game.UI.Open<GameOverPanel>();
 
-            // ★ 这里必须用 Timer.AfterUnscaled，不能用 Timer.After。
+            // 这里必须用 Timer.AfterUnscaled，不能用 Timer.After。
             //
-            // 踩过的坑（症状："游戏即将返回标题画面"永久卡死）：上面刚把 timeScale 设成 0，
             // 而引擎的 Timer 是靠 Time.deltaTime 推进的 —— timeScale=0 时 deltaTime 恒为 0，
             // 普通 After 排出来的回调【永不执行】，画面就永久停在 GameOver
             // （实测卡了 30 秒以上、一条日志都没有）。
             // 引擎已为此补了不受 timeScale 影响的 AfterUnscaled。
-            // 修复过程与精度边界见引擎件 `Runtime/Core/Timer.cs` 的 `AfterUnscaled` 注释 ——
             // 引擎改动影响所有项目，所以说明跟着**引擎代码**走，不放业务项目里。
             Game.Timer.AfterUnscaled(GameOverStaySeconds, () =>
             {

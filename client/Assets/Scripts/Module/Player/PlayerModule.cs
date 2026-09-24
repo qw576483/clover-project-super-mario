@@ -146,7 +146,7 @@ namespace SuperMario.Module.Player
                 MarioAction.FireJump, MarioAction.FireSkid, MarioAction.FireCrouch,
                 MarioAction.Grow0, MarioAction.Grow1,
 
-                // ★ 旗杆下滑用的"抱杆"两帧。
+                // 旗杆下滑用的"抱杆"两帧。
                 //
                 // 漏了它们的后果是【马里奥整段下滑隐形】：滑杆时取的是
                 // CurrentClimbFrame()，清单里没有 ⇒ SpriteSet.Get 返回 null 贴图 ⇒
@@ -156,16 +156,15 @@ namespace SuperMario.Module.Player
                 MarioAction.BigClimb0, MarioAction.BigClimb1,
                 MarioAction.FireClimb0, MarioAction.FireClimb1,
             };
-            // ★ 精灵集合收敛到引擎 `SpriteSet`（`clover-client-unity-engine/Runtime/Resource/SpriteSet.cs`）：
+            // 精灵集合收敛到引擎 `SpriteSet`（`clover-client-unity-engine/Runtime/Resource/SpriteSet.cs`）：
             //   它按路径登记两个名字（全路径 + **末段去扩展名**），而 `ResPaths.Mario(a)` 的末段
-            //   就是动作常量本身（`MarioDir + "/" + a`）⇒ 下游 `_sprites.Get(MarioAction.X)` 与原来同义。
             //   （# takeover: 原派工片在收尾前中断，本处由主 agent 按冻结签名补完。）
             var paths = Array.ConvertAll(wanted, ResPaths.Mario);
             _pinnedPaths = paths;
 
             _sprites.LoadSet(paths, () =>
             {
-                // ⚠️ 加载完成后**自己钉住**这批图：引擎 SpriteSet 不持引用计数（见字段注释），
+                // 加载完成后**自己钉住**这批图：引擎 SpriteSet 不持引用计数（见字段注释），
                 //    不再各取一次引用的话，条目被水位淘汰后 Get 返回 null ⇒ 马里奥整段隐形
                 //    （本文件上面记的"旗杆下滑隐形"就是这么来的）。走引擎缓存取，不重复读盘。
                 var res = Game.Res;
@@ -259,10 +258,8 @@ namespace SuperMario.Module.Player
         {
             if (!_alive || _actor == null) return;
 
-            // ★ 受击后的无敌帧：这段时间内【不再受伤】。
+            // 受击后的无敌帧：这段时间内【不再受伤】。
             //
-            // 踩过的坑（症状是"变大后撞一下栗宝宝直接死"）：原先没有任何无敌帧，
-            // 而敌人碰撞判定是【每帧】跑的 —— 马里奥和栗宝宝重叠期间，TakeDamage 会
             // 被逐帧调用：第 1 帧 Big→Small、第 2 帧 Small→Kill。玩家看到的是一次撞击
             // 瞬间死亡，完全不像"受伤降级"。
             // 原版挨打后会闪大约 1.5~2 秒（GameConst.HitInvincibleTime）。
@@ -279,9 +276,8 @@ namespace SuperMario.Module.Player
             _power = _power == PowerState.Fire ? PowerState.Big : PowerState.Small;
             _actor.PlayTransform(PlayerMotion.Shrinking, _power);
 
-            // ★ 受伤（掉能力）音效：用户 2026-09-20 点名「受伤没有音效」。
             //   走 `Sfx.PowerDown`（= 与进管共用的那个采样，出处见 `Core/ResPaths.cs`）。
-            //   ⚠️ 只在这一支响 —— 小马里奥挨打走的是上面的 `Kill()`，那一声是 `Sfx.Death`（在 AppFlow 放），
+            //   只在这一支响 —— 小马里奥挨打走的是上面的 `Kill()`，那一声是 `Sfx.Death`（在 AppFlow 放），
             //   两处都放就会"又掉能力又死"两声叠在一起。
             _audio?.PlaySfx(Sfx.PowerDown);
             Game.Logger.Info("Player", $"受伤降级 → {_power}（音效 {Sfx.PowerDown}）");
@@ -298,7 +294,6 @@ namespace SuperMario.Module.Player
         /// <summary>
         /// 吃到无敌星。
         /// <para>
-        /// 踩过的坑：这个能力在 <c>GameConst.StarInvincibleTime</c> 里【早就定义好了时长】，
         /// 但全项目没有任何代码读它 —— 常量悬空 = 功能没做。所以这颗星不是"没验"，
         /// 是压根没接线。
         /// </para>
@@ -337,7 +332,6 @@ namespace SuperMario.Module.Player
         }
     }
 
-    // （原实现 `internal sealed class SpriteSet` 已删除 —— 它整段下沉进了引擎
     //   `clover-client-unity-engine/Runtime/Resource/SpriteSet.cs`，含"取不到只报一次"的语义；
-    //   本文件现在只用引擎那一份，⛔ 不许再在项目里起第二套。）
+    //   本文件现在只用引擎那一份，不许再在项目里起第二套。）
 }

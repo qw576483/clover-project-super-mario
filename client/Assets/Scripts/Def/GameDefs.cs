@@ -36,7 +36,7 @@ namespace SuperMario.Def
         QuestionBlockOneUp,
 
         /// <summary>
-        /// 含 **★无敌星** 的砖：顶出无敌星，砖本身**不可打碎**（原版里"装着道具的砖"都顶不碎）。
+        /// 含 **无敌星** 的砖：顶出无敌星，砖本身**不可打碎**（原版里"装着道具的砖"都顶不碎）。
         /// <para>出处：元素表 §B2-1 —— T(87,0) 原版是 `Brown Brick Block- Starman.prefab`
         /// （`World 1-1.unity:4633`）。</para>
         /// </summary>
@@ -44,13 +44,11 @@ namespace SuperMario.Def
 
         /// <summary>
         /// **多金币砖**：连顶出币（上限见 <c>GameConst.MultiCoinBrickCoins</c>），币出完变暗块，同样顶不碎。
-        /// <para>出处：元素表 §B2-2 —— T(80,0) 原版是 `Brown Brick Block- MultiCoin.prefab`（`:8945`）。</para>
         /// </summary>
         BrickMultiCoin,
 
         /// <summary>
         /// **隐形**的 1-UP 块：看不见但实心，从下方顶到才现形并弹出 1-UP 蘑菇。
-        /// <para>出处：元素表 §B2-3 —— T(50,1) 原版是 `Hidden Question Block- Oneup`（`:627` + `:4930`）。</para>
         /// </summary>
         HiddenBoxOneUp,
     }

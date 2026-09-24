@@ -32,8 +32,6 @@ namespace SuperMario.Module.Flow
         /// <summary>
         /// 旗杆上那面旗（由建它的 <c>LevelProps.Build</c> 登记）。马里奥滑杆时带着它一起降。
         /// <para>
-        /// 为什么要在这里登记：原先 <c>PlayerActor</c> 用 <c>GameObject.Find("Flag")</c> 按名字找 ——
-        /// 名字一改（或对象只在关卡的异步加载回调里建出来）就静默失效（历史债 E-5）。
         /// 改成"谁建谁登记、谁用谁读"，名字不再是契约。
         /// </para>
         /// </summary>
@@ -49,7 +47,6 @@ namespace SuperMario.Module.Flow
         /// 本局要读的关卡数据路径（<c>Levels/World1-1</c> 这种，相对 Resources）。
         /// <para>
         /// <b>由流程层在进关前设置</b>（<c>AppFlow.SetLevel</c>），<c>StageSession</c> 只是消费者。
-        /// 原先这条路径是写死在 StageSession 里的（只认 Level11），加第二关就没法走通了。
         /// </para>
         /// </summary>
         public static string LevelPath { get; private set; } = "Levels/World1-1";
@@ -85,7 +82,6 @@ namespace SuperMario.Module.Flow
         /// <para>
         /// 默认出生点是"关卡最左 + 3.5 格、站在地面顶"（<c>StageSession.SpawnPlayer</c>），
         /// 那是主关卡（水平铺开、从左边进）的规则。管中密室的落点由元素表给定
-        /// （§3.2「玩家落点 clone (-6,9)」），且正下方就是金币平台 —— 用默认规则会正好生在平台里。
         /// 用 null 表示"按默认规则"。
         /// </para>
         /// </summary>
@@ -110,7 +106,6 @@ namespace SuperMario.Module.Flow
         /// 以及进出管中密室，形态（大 / 火）都保留；**只有死亡**才打回小马里奥。
         /// 本工程每一"段"都是一个独立的 <c>StageSession</c>（新的 <c>PlayerModule</c> ⇒ 默认 Small），
         /// 所以"跨段保留"必须显式把形态交接过去 —— 这就是这个字段的用途
-        /// （原先没有它，实测症状是"大马里奥进金币房出来变小马里奥"，登记项 E-13）。
         /// </para>
         /// <para>
         /// 由流程层在进关前设：换段（<c>AppFlow.NextLevel</c>）与进密室（<c>AppFlow.BeginBonusRoom</c>）
@@ -118,9 +113,8 @@ namespace SuperMario.Module.Flow
         /// （<c>AppFlow.ReloadStageWithIntro</c>）清成 null。
         /// </para>
         /// <para>
-        /// ⛔ <b>不要放在 <c>AppFlow.EnterLoading</c> 里清</b>：那是换段的必经之路，而且跑在
+        /// <b>不要放在 <c>AppFlow.EnterLoading</c> 里清</b>：那是换段的必经之路，而且跑在
         /// <c>NextLevel</c> 设值**之后**（<c>Fsm.Transition</c> 是同步的）⇒ 会把要带过去的形态擦掉。
-        /// 实测症状：1-1 吃到蘑菇变大 → 通关 → 进 1-2 是 <c>Small</c>（2026-09-19，本片修掉）。
         /// </para>
         /// </summary>
         public static PowerState? SpawnPower { get; private set; }

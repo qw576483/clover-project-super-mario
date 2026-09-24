@@ -47,7 +47,6 @@ namespace SuperMario.UI
         /// <summary>
         /// 入参 = 本关剩余命数（由 <c>AppFlow.EnterLoading</c> 传入）。
         /// <para>
-        /// 踩过的坑：原来在 <see cref="Awake"/> 里读 <c>StageContext.Score.Lives</c>。
         /// 但"打开面板"发生在"新会话 Build 完并 Restore 分数"【之前】—— 那一刻 StageContext
         /// 还没绑定，于是回退到 <c>StartLives</c>：<b>死亡重来时这张卡永远显示 ×3，
         /// 而不是真实的剩余命数</b>。首次进关完全看不出问题（新游戏本来就是 3 条命），所以藏得很深。
@@ -60,7 +59,7 @@ namespace SuperMario.UI
                         ?? (StageContext.Score != null ? StageContext.Score.Lives : GameConst.StartLives);
             if (_lives != null) _lives.text = lives.ToString();
 
-            // ★ 关卡名必须**每次都刷**：这张卡是复用的同一个面板实例，而 `Awake` 只在第一次构建时跑过 ——
+            // 关卡名必须**每次都刷**：这张卡是复用的同一个面板实例，而 `Awake` 只在第一次构建时跑过 ——
             //   用户报的 bug 就是"1-1 通关切到 1-2，黑屏上还写着 WORLD 1-1"（那一行原本是写死的字面量）。
             if (_world != null) _world.text = "WORLD " + StageContext.WorldLabel;
 

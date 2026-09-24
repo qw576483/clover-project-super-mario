@@ -63,7 +63,6 @@ namespace SuperMario.UI
             if (Game.Input.GetKeyDown(GameKey.Escape))
             {
                 // 只发事件，由 AppFlow 决定去哪（面板之间不互相跳转）。
-                // 踩过的坑：这里原来是 CloseAll + Transition + Open 三连，而 CloseAll 会把
                 // 「正在执行这段代码的自己」销毁掉，之后还继续调 UI/流程 API ——
                 // 属于在已销毁组件上继续跑逻辑，行为不可预期。
                 Game.Event.Emit(Events.BackToMain);

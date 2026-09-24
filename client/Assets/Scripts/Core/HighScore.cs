@@ -9,9 +9,7 @@ namespace SuperMario.Core
     /// 落盘成 JSON 文件。
     /// </para>
     /// <para>
-    /// <b>踩过的坑</b>：这里原本直接用了 <c>PlayerPrefs</c>。功能上能跑，但那是**绕开引擎自己找存储** ——
     /// 换平台、换存储策略都不会跟着变，同一个工程里也多出第二套持久化路径。
-    /// 引擎已经公开了 <c>ISetting</c>，用代码搭通用设施前先查引擎能力（见 skill §1）。
     /// </para>
     /// <para>
     /// <b>注意</b>：切到 <c>Setting</c> 之后，旧 <c>PlayerPrefs</c> 里的记录会**丢一次**（换存储了）。

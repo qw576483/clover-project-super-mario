@@ -34,7 +34,7 @@ namespace SuperMario.UI
             barRect.sizeDelta = new Vector2(0f, 130f);
             barRect.anchoredPosition = Vector2.zero;
 
-            // ★ 四栏的横向位置**照原版首屏逐像素量出来**（不是自己摆的）：
+            // 四栏的横向位置**照原版首屏逐像素量出来**（不是自己摆的）：
             //   原版基线 `策划/基线图/nes-original-1-1-first-screen.png`（256×240，16 px = 1 格）里，
             //   HUD 第二行（y=24..31）的墨迹列区间是 ——
             //     `000000`(分数) x=24..70 ｜ **金币图标 x=89..93（橙 252,152,56 + 黑描边，高 8）**
@@ -45,8 +45,6 @@ namespace SuperMario.UI
             //   像素偏移只在 1920 宽下才等于这几个分数（换分辨率就错位）。
             //   量测脚本：`.ai-tmp/test/measure_hud.py` 与 `.ai-tmp/test/hud_coin_icon.py`（同一套也量我们自己的截图）。
             //
-            // ⛔ 踩过的坑（用户 2026-09-19 问「原版上面没有图标吗？」）：原来这一格**只写了 `×00`、
-            //   而且锚点直接用 0.34766 = 图标的位置** ⇒ 文字整体左移 8 像素、图标根本没有。
             //   上面那两行区间（89..93 / 97..118）是同一天把基线图逐列扫墨迹扫出来的（脚本可复跑）。
             MakeLabel(bar, "MarioCap", "MARIO", 0.09375f, TextAnchor.MiddleLeft, new Vector2(0f, -28f));
             _score = MakeLabel(bar, "Score", "000000", 0.09375f, TextAnchor.MiddleLeft, new Vector2(0f, -66f));
@@ -125,7 +123,7 @@ namespace SuperMario.UI
 
         private void OnDestroy()
         {
-            // ⛔ 退出 / 编辑器停止播放时必须判空：销毁顺序是
+            // 退出 / 编辑器停止播放时必须判空：销毁顺序是
             //   EngineRunner.OnApplicationQuit → Game.Shutdown()（把 Event 门面置为 null）
             //   → Unity 才销毁本面板 → 这里再解引用就是 NullReferenceException。
             //   此时事件总线已被 Shutdown 的 Event.OffAll() 清空，不解绑也不会残留订阅。

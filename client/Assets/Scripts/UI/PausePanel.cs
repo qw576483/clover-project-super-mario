@@ -42,12 +42,9 @@ namespace SuperMario.UI
         }
 
         /// <summary>
-        /// 音量条尺寸（画布单位）。出处 = 旧实现里那条**轨道**的尺寸（420×12；
-        /// 外层 `Vol_{group}` 节点高 30 只是留白，可见的条一直是 12 高）。
         /// </summary>
         private static readonly Vector2 VolBarSize = new Vector2(420f, 12f);
 
-        /// <summary>轨道底色。出处 = 旧实现 `BG` 块的 <c>(0.25, 0.25, 0.25)</c>。</summary>
         private static readonly Color VolTrackColor = new Color(0.25f, 0.25f, 0.25f);
 
         /// <summary>手柄宽度（画布单位）= 轨道高度（12 ⇒ 方块手柄，像素风）。</summary>
@@ -55,20 +52,18 @@ namespace SuperMario.UI
 
         private static void BuildVolumeSlider(Transform parent, string label, SoundGroup group, float y)
         {
-            // ★ 控件本身调引擎 `UIFactory.CreateSlider`（`Runtime/Presentation/UIWidgetControls.cs`）。
+            // 控件本身调引擎 `UIFactory.CreateSlider`（`Runtime/Presentation/UIWidgetControls.cs`）。
             // 本项目只保留两样**项目内容**：
             //   ① 像素色板（轨道深灰 / 已填金色）与手柄宽度 —— 引擎刻意不含任何项目配色
-            //      （见该文件头「⛔ 没有下沉：配色 / 文案 / 字号档位都是业务取值」）；
+            //      （见该文件头「没有下沉：配色 / 文案 / 字号档位都是业务取值」）；
             //   ② "放在哪"—— 引擎的 CreateSlider 是**左上角锚点**定位（`CreateBoxRect`），
             //      本项目所有控件都是"相对父层中心偏移"的口径，故建好后把整块的锚点/轴心改回中心
             //      （只动这一个 rect，不动引擎内部搭好的 Fill / Handle 层级）。
             //
-            // ⛔ 不再自己搭"Fill Area / Fill"：uGUI Slider 的填充靠 `fillRect.anchorMax[axis]` 按比例
+            // 不再自己搭"Fill Area / Fill"：uGUI Slider 的填充靠 `fillRect.anchorMax[axis]` 按比例
             //    变化，而 anchorMax 是相对 fillRect 的**父节点**（Slider 缓存的 m_FillContainerRect）解析的
-            //    —— 旧实现就栽在这里（Fill 直接挂整块、锚点定死 (0.5,0.5) ⇒ 两条音量条永远满格，
-            //    `pause.png` 可见，而代码零报错）。引擎版只依赖公开属性 `fillRect` / `handleRect`。
             //
-            // ⚠️ 节点名必须是 `Vol_{group}` 且是**本面板的直接子节点**：取证脚本
+            // 节点名必须是 `Vol_{group}` 且是**本面板的直接子节点**：取证脚本
             //    `tools/probes/probe.cs` 的 `SetVol` / `VolReport` 按 `panel.transform.Find("Vol_BGM")`
             //    取它身上的 `Slider`（E-19「数值 ↔ 画面互相印证」）。改名或挪层 = 那条判据失效。
             var handleColors = ColorBlock.defaultColorBlock;
@@ -97,7 +92,6 @@ namespace SuperMario.UI
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, y), VolBarSize);
 
             // 标签放在滑杆【左侧之外】。
-            // 踩过的坑：原先给 -260，但 Label 是"锚在父节点中心"的右对齐文案
             // （右边缘 = 锚点 x + 半宽 = -260+80 = -180），而滑杆左边缘在 -210
             // —— 于是"音乐 / 音效"两个字压在金色填充条上，糊成一片看不清。
             // 挪到 -320 后右边缘落在 -240，与滑杆左边缘留出 30 的间隙。

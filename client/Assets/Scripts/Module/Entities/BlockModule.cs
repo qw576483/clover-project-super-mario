@@ -104,9 +104,8 @@ namespace SuperMario.Module.Entities
             go.transform.SetParent(_root, false);
             // 方块正好占满一格 [tile.y, tile.y+1]。
             //
-            // ⚠️ Y 必须给【格底边】，不能给格中心：方块贴图来自 Sprites/Items/，
+            // Y 必须给【格底边】，不能给格中心：方块贴图来自 Sprites/Items/，
             // 轴心是【底部居中】（见 SpriteImportPostprocessor），给格中心会让整块砖
-            // 浮高半格。实测症状很误导：**看起来像蘑菇的问题** ——
             // "蘑菇停在砖块中腰、而不是砖上"（蘑菇按物理落在正确的格顶 y+1，
             // 是方块自己画高了才对不齐）。X 仍然给中心。
             go.transform.position = new Vector3(tile.x + 0.5f, tile.y, 0f);
@@ -114,8 +113,7 @@ namespace SuperMario.Module.Entities
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 1;
 
-            // 顶开之后弹什么。★星砖 / 多金币砖 / 隐形 1-UP 块都是原版 1-1 里**本来就有**的
-            // （出处：《原版1-1与1-2元素表》§2 的 B2-1 / B2-2 / B2-3），不是本项目新增的种类。
+            // 顶开之后弹什么。星砖 / 多金币砖 / 隐形 1-UP 块都是原版 1-1 里**本来就有**的
             var content = kind switch
             {
                 EntityKind.QuestionBlock => BlockContent.Coin,
@@ -229,11 +227,10 @@ namespace SuperMario.Module.Entities
             if (normal != null) _sr.sprite = normal;
             else Game.Logger.Error("Block", $"方块贴图为空：{kind} @ ({tile.x},{tile.y})");
 
-            // ★ 让**贴图**正好填满这一格 —— 与轴心无关（判据用 bounds，不用"轴心叫什么"）。
+            // 让**贴图**正好填满这一格 —— 与轴心无关（判据用 bounds，不用"轴心叫什么"）。
             //   `Sprites/Items/` 的砖是【底部居中】轴心（bounds y ∈ [0,1]）⇒ 位置 = 格底边；
             //   而地下关的**砖地形**走的是同一条方块实体路径，贴图是 `WorldTileSprites_1`（**居中**轴心，
             //   bounds y ∈ [-0.5,0.5]）⇒ 位置必须是格中心。
-            //   ⛔ 原来在 `BlockModule.Spawn` 里写死"y = 格底边"：1-1 的砖是对的，但 1-2 的**整片地在/墙**
             //   被画低了半格，而碰撞面是正确的 —— 用户看到的就是「1-2 人物怪物都不在地面上」：
             //   人明明站在正确的碰撞面上，是地砖自己画低了半格。
             //   ⇒ 对齐之后**必须重取 `_basePos`**（顶砖动画是绕着它做的）。
@@ -249,7 +246,6 @@ namespace SuperMario.Module.Entities
             }
             _basePos = transform.position;
 
-            // 隐形 1-UP 块（元素表 §B2-3）：贴图先【不画】—— 它就是隐形的，
             // 但实心位图里照样登记（能站、能顶），顶到才现形为暗块。
             if (kind == EntityKind.HiddenBoxOneUp)
             {
@@ -296,15 +292,15 @@ namespace SuperMario.Module.Entities
             // 已经在动的方块不再响应：连续顶会叠加位移，方块看起来会越飞越高。
             if (!Solid || _bumpTimer >= 0f) return;
 
-            // ★★ 顶砖时"砖上面那些东西"的两条规则 —— 出处 clone `Assets/Scripts/RegularBrickBlock.cs:22-40`：
+            // 顶砖时"砖上面那些东西"的两条规则 —— 出处 clone `Assets/Scripts/RegularBrickBlock.cs:22-40`：
             //   ① 砖上有敌人 ⇒ 逐个 `BlockHitEnemy` ⇒ `HitBelowByBlock()`（`_common/Enemy.cs:49` 的基类实现
             //      就是 `FlipAndDie()` —— 与星撞 / 壳撞 / 火球**完全同款**的翻飞）+ `hitByBlockBonus`（100）；
             //   ② 砖上有金币 ⇒ "收走"：**在砖上方 2 格**生成一枚弹出金币（分数与音效都来自这枚新金币：
             //      `BlockCoin.Start()` → `AddCoin(位置 + 下)`），原金币直接销毁、不发分也不响。
             //      谁算"在砖上" = `RegularBrickBlockCoinDetector.cs:8-11`（砖顶那个 trigger 里的 Coin）。
-            //   ⚠️ 两条都必须在"顶碎 / 顶一下"**之前**处理 —— clone 就是这个顺序：大马里奥顶碎空砖时，
+            //   两条都必须在"顶碎 / 顶一下"**之前**处理 —— clone 就是这个顺序：大马里奥顶碎空砖时，
             //      砖上的敌人照样翻飞、金币照样被收走。
-            //   ⚠️ 问号块**只有①没有②**：clone 的可收集块 `_common/CollectibleBlock.cs` 挂着敌人表，
+            //   问号块**只有①没有②**：clone 的可收集块 `_common/CollectibleBlock.cs` 挂着敌人表，
             //      但没有任何金币检测器。
             KillEnemiesOnTop();
             if (_kind == EntityKind.Brick) CollectCoinOnTop();
@@ -317,7 +313,6 @@ namespace SuperMario.Module.Entities
                     Bump(Sfx.Bump);
                     return;
 
-                // ── 含 ★无敌星 的砖（元素表 §B2-1）──
                 case EntityKind.BrickStarman:
                     Bump(Sfx.Bump);
                     if (Used) return;
@@ -327,7 +322,6 @@ namespace SuperMario.Module.Entities
                     Game.Logger.Info("Block", $"无敌星砖 ({Tile.x},{Tile.y})：顶出★（砖留下变暗块）");
                     return;
 
-                // ── 多金币砖（元素表 §B2-2：连顶 10 次）──
                 case EntityKind.BrickMultiCoin:
                     Bump(Sfx.Bump);
                     if (_multiCoinLeft <= 0) return;
@@ -341,7 +335,6 @@ namespace SuperMario.Module.Entities
                     Game.Logger.Info("Block", $"多金币砖 ({Tile.x},{Tile.y})：出币，还剩 {_multiCoinLeft} 枚");
                     return;
 
-                // ── 隐形 1-UP 块（元素表 §B2-3）──
                 case EntityKind.HiddenBoxOneUp:
                     Bump(Sfx.Bump);
                     if (Used) return;
@@ -361,9 +354,7 @@ namespace SuperMario.Module.Entities
             switch (_content)
             {
                 case BlockContent.Coin:
-                    // ★ 必须同时弹出金币动画。
-                    // 踩过的坑：这里原来只有加分 + 音效，**没有 Spawn 金币**，
-                    // 于是顶问号块"分数涨了、声音响了，但画面上一枚金币都没有" ——
+                    // 必须同时弹出金币动画。
                     // 只对数字做验证就完全看不出来。ItemModule.Spawn 的 default 分支
                     // 正是 CoinPop（会从方块里蹦出来再消失），这里补上即可。
                     _items?.Spawn(BlockContent.Coin, new Vector2(Tile.x + 0.5f, Tile.y + 1f));
@@ -381,8 +372,6 @@ namespace SuperMario.Module.Entities
                     _audio?.PlaySfx(Sfx.PowerUpAppear);
                     break;
 
-                // 下面两种原先是【漏的】：BlockContent 里定义了 OneUp / Star，
-                // 但这里没有 case —— 于是"装着 1-UP 或星星的方块"顶开之后什么都不会出来，
                 // 而且不报错（switch 静默走过）。定义了没接线，和没做是一回事。
                 case BlockContent.OneUp:
                     // 1-UP 不分大小形态，恒为 1-UP 蘑菇。
@@ -470,7 +459,7 @@ namespace SuperMario.Module.Entities
         /// <para>
         /// 出处 = clone `Assets/Scripts/BlockCoin.cs:11`：`AddCoin(transform.position + Vector3.down)`
         /// —— 金币本体的位置是方块上方一格（<c>Tile.y + 1</c>），再 <c>down</c> 一格 ⇒ 方块本身这一格。
-        /// ⛔ 不在这里另定一个"好看的位置"：那行字与原版必须落在同一个地方。
+        /// 不在这里另定一个"好看的位置"：那行字与原版必须落在同一个地方。
         /// </para>
         /// </summary>
         private Vector2 CoinTextPos => new Vector2(Tile.x + 0.5f, Tile.y);

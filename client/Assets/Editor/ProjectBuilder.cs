@@ -62,7 +62,6 @@ namespace SuperMario.EditorTools
             EnsureFolder(UiDir);
 
             // 前置：确认脚本资产已在 AssetDatabase 里。
-            // 踩过的坑：在"同一次批处理里刚编译完脚本"时直接 SaveAsPrefabAsset，MonoBehaviour
             // 的 m_Script 会被写成 {fileID: 0}（MonoScript 尚未导入，引用解析不到），
             // 结果是预制体存在但组件是空壳 —— 运行时 UIManager 报 "Component X not found on
             // prefab"，所有面板都打不开。
@@ -80,9 +79,8 @@ namespace SuperMario.EditorTools
 
                 var go = new GameObject(name, typeof(RectTransform));
 
-                // ★ 面板根节点必须【铺满父层】，否则整个 UI 都会缩到屏幕正中一小块。
+                // 面板根节点必须【铺满父层】，否则整个 UI 都会缩到屏幕正中一小块。
                 //
-                // 踩过的坑：新建的 RectTransform 默认是 anchor(0.5,0.5) + sizeDelta(100,100)。
                 // 若不在这里显式撑开，面板根就只有 100x100；而 UIBuilder 里所有
                 // UIBuilder.Panel/Stretch 建的子节点都是 anchorMin(0,0)+anchorMax(1,1)
                 // —— "铺满父节点"。父节点只有 100x100 时，它们就只铺成 100x100。
@@ -161,7 +159,6 @@ namespace SuperMario.EditorTools
                 Debug.Log($"[ProjectBuilder] 场景：{path}");
             }
 
-            // 回到原来打开的场景，避免生成完之后视角被切到最后一个场景。
             if (!string.IsNullOrEmpty(previous)) EditorSceneManager.OpenScene(previous);
 
             ApplyBuildSettings();

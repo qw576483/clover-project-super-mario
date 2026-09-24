@@ -120,9 +120,8 @@ namespace SuperMario.Module.Entities
 
         public void Preload(Action onDone)
         {
-            // ★ 待加载清单先收集成一张表，_pending 直接取【清单长度】—— 不手写数字。
+            // 待加载清单先收集成一张表，_pending 直接取【清单长度】—— 不手写数字。
             //
-            // 踩过的坑（代价：整局永久卡死，且零报错）：原来写的是
             //     _pending = 2 + SpriteNames.FireFlower.Length + SpriteNames.Coin.Length;
             // 但下面实际只发了 1 张蘑菇 + 6 张花 + 4 张金币 = 11 次加载，那个 "2" 应该是 1。
             // 于是 --_pending 永远停在 1，onDone 永不触发，流程永久停在 Loading 读条屏，
@@ -290,12 +289,11 @@ namespace SuperMario.Module.Entities
         /// <c>new Vector2(tx + 0.5f, ty + 0.5f)</c>），用"位置 = 底边"算就会整体高半格。
         /// </para>
         /// <para>
-        /// 后果（用户实测 2026-09-20「砖块上如果有东西，好像顶了也没效果」的真因）：
         /// `Block.CollectCoinOnTop` 用的是 `StandingOnTop`——要求金币**底边贴着砖顶**（±0.25 格），
         /// 而实际差了整整 <b>0.5 格</b> ⇒ 这条原版规则从未触发过（代码在、出处也有，就是判不到）。
         /// 顺带把"看起来在那、要跳高半格才吃得到"的对不齐也一起消掉。
         /// </para>
-        /// <para>⛔ 只给"按格子中心摆放"的道具用；按底边摆放的（蘑菇 / 星星 / 弹出金币）保持原样。</para>
+        /// <para>只给"按格子中心摆放"的道具用；按底边摆放的（蘑菇 / 星星 / 弹出金币）保持原样。</para>
         /// </summary>
         protected void RecomputeBoundsCentered(Vector2 size)
         {
@@ -334,7 +332,7 @@ namespace SuperMario.Module.Entities
                 transform.position = new Vector3(center.x, center.y, 0f);
                 TargetPos = transform.position;
                 EmergeTimer = -1f;                    // 没有出场动画
-                // ★ 用"以位置为中心"的碰撞盒（不是"位置=底边"）：金币是按**格子中心**摆的，
+                // 用"以位置为中心"的碰撞盒（不是"位置=底边"）：金币是按**格子中心**摆的，
                 //   用底边算会整体高半格 ⇒ `Block.CollectCoinOnTop` 的"底边贴砖顶"判据永远差 0.5 格
                 //   （见 RecomputeBoundsCentered 的说明）。视觉位置一个字都没动。
                 RecomputeBoundsCentered(Size);
@@ -356,18 +354,17 @@ namespace SuperMario.Module.Entities
 
         // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
         //
-        // 原先这里有一个私有迭代器 `Overlap`（`yield return new Vector2Int(x,y)`）。它与
         // PlayerActor / FireballModule / EnemyModule 三处**逐字相同** ⇒ 已下沉为
         // `CloverEngine.GridUtil`（出处与逐字复刻的口径见 `Runtime/Core/GridUtil.cs` 文件头：
         // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
         // 那个 `- 0.0001f` 收边量即 `GridUtil.EdgeEpsilon`）。
         //
-        // ⛔ 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器、每次调用都分配，
+        // 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器、每次调用都分配，
         //    而道具的 X/Y 解算是**每帧每只道具**都跑的热路径。`ForEach` 只在"委托已缓存"时不分配
-        //    —— 引擎文件头 ★ GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个委托」
+        //    —— 引擎文件头 GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个委托」
         //    ⇒ 委托存进 <see cref="_onScanTile"/>，状态存字段（回调不捕获局部变量）。
         //
-        // ⛔ 算法本身一字未动：仍是"X 先走完解 X、再走 Y 解 Y"、仍是"命中第一格就停"。
+        // 算法本身一字未动：仍是"X 先走完解 X、再走 Y 解 Y"、仍是"命中第一格就停"。
 
         /// <summary>缓存的逐格回调（热路径不分配，见上）。</summary>
         private Action<int, int> _onScanTile;
@@ -380,8 +377,6 @@ namespace SuperMario.Module.Entities
         protected int HitTileY { get; private set; }
 
         /// <summary>
-        /// 扫矩形覆盖到的整数格，**命中第一个实心格就停**（逐字等价原来的 `foreach` + `Overlap` + `break`：
-        /// 遍历顺序由引擎 <see cref="GridUtil.ForEach"/> 保证 = y 升序 / x 升序，与旧迭代器相同）。
         /// </summary>
         /// <returns><c>true</c> = 命中了一个实心格（格坐标见 <see cref="HitTileX"/> / <see cref="HitTileY"/>）。</returns>
         protected bool ScanFirstSolid(ILevel level, Rect r)
@@ -395,7 +390,6 @@ namespace SuperMario.Module.Entities
             return _scanHit;
         }
 
-        /// <summary>逐格回调：命中即停（<see cref="_scanHit"/> 复刻原来的 <c>break</c>）。</summary>
         private void OnScanTile(int tx, int ty)
         {
             if (_scanHit) return;                      // = 原 `break`
@@ -430,8 +424,7 @@ namespace SuperMario.Module.Entities
             Content = content;
             Sr = sr;
             Sr.sprite = sprite;
-            // 这里不再有"1-UP 染色"那一行：原版有独立贴图（smb_items_sheet_14），
-            // 用乘绿去模拟既得不到原来的实色像素，也让"素材有没有到位"变得看不出来。
+            // 这里不再有"1-UP 染色"那一行：原版有独立贴图（smb_items_sheet_14）。
 
             // 从方块里"长"出来：起点在方块内，终点在方块上方一格。
             transform.position = new Vector3(feetPos.x, feetPos.y - GameConst.TileSize, 0f);

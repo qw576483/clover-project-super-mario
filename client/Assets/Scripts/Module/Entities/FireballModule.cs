@@ -126,7 +126,6 @@ namespace SuperMario.Module.Entities
 
         /// <summary>
         /// 逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）—— 收敛掉自写的
-        /// `_frames` / `_animTimer` / `_frame` / `_sr.sprite = …` 四件套（本处原先与另外 4 处逐字相同）。
         /// </summary>
         private SpriteFrameAnimator _anim;
 
@@ -149,7 +148,7 @@ namespace SuperMario.Module.Entities
             // 位置与初速都照 clone 写（不要在这里自己调参）：
             //   · 出生点 = clone `Mario.cs:247` `Instantiate(Fireball, FirePos.position, …)`，
             //     `FirePos` 是 Mario 的子节点、local = (±0.5, 1)（出处 `Prefabs/_managers/Level Starter.prefab:749`），
-            //     ⚠️ 我们这里留的是既有偏移 (±0.4, +0.6)（**未搬到 clone 的 FirePos**，登记在 E-22）。
+            //     我们这里留的是既有偏移 (±0.4, +0.6)（**未搬到 clone 的 FirePos**，登记在 E-22）。
             //   · 初速竖直分量 = **向下** 11 —— clone `MarioFireball.cs:21` `(directionX*absVelocity.x, -absVelocity.y)`。
             transform.position = new Vector3(feetPos.x + (facingLeft ? -0.4f : 0.4f), feetPos.y + 0.6f, 0f);
             _vel = new Vector2((facingLeft ? -1f : 1f) * GameConst.FireballSpeed, -GameConst.FireballVelocityY);
@@ -207,7 +206,6 @@ namespace SuperMario.Module.Entities
                 else
                 {
                     // 撞顶 ⇒ 压回向下，速度 = `-absVelocity.y`（clone `MarioFireball.cs:52`）。
-                    // ⚠️ 改前这里是 `0f`（"贴住顶"）—— 与原版"顶一下立刻往下"不一致，一并照 clone 改。
                     ny = _hitTileY - Size.y * 0.5f;
                     _vel.y = -GameConst.FireballVelocityY;
                 }
@@ -241,16 +239,15 @@ namespace SuperMario.Module.Entities
 
         // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
         //
-        // 原先这里有一个私有迭代器 `Overlap`（`yield return new Vector2Int(x,y)`），
         // 与 PlayerActor / ItemModule / EnemyModule 三处**逐字相同** ⇒ 已下沉为
         // `CloverEngine.GridUtil`（出处与逐字复刻的口径见 `Runtime/Core/GridUtil.cs` 文件头：
         // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
         // 那个 `- 0.0001f` 收边量即 `GridUtil.EdgeEpsilon`）。
         //
-        // ⛔ 用 `ForEach` 而不是迭代器 `GridUtil.Enumerate`（后者每次调用都分配），并且把委托
-        //    **缓存到字段** —— 引擎文件头 ★ GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个
+        // 用 `ForEach` 而不是迭代器 `GridUtil.Enumerate`（后者每次调用都分配），并且把委托
+        //    **缓存到字段** —— 引擎文件头 GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个
         //    委托」；状态也放字段 ⇒ 回调不捕获局部变量、整条火球热路径零分配。
-        // ⛔ 算法一字未动：仍是"X 撞墙即炸 / Y 落地反弹"，仍是"命中第一格就停"。
+        // 算法一字未动：仍是"X 撞墙即炸 / Y 落地反弹"，仍是"命中第一格就停"。
 
         /// <summary>缓存的逐格回调（热路径不分配，见上）。</summary>
         private Action<int, int> _onScanTile;
@@ -261,8 +258,6 @@ namespace SuperMario.Module.Entities
         private int _hitTileY;
 
         /// <summary>
-        /// 扫矩形覆盖到的整数格，**命中第一个实心格就停**（逐字等价原来的 `foreach` + `Overlap` + `break`：
-        /// 遍历顺序由引擎 ForEach 保证 = y 升序 / x 升序，与旧迭代器相同）。
         /// </summary>
         private bool ScanFirstSolid(Rect r)
         {
@@ -275,7 +270,6 @@ namespace SuperMario.Module.Entities
             return _scanHit;
         }
 
-        /// <summary>逐格回调：命中即停（<see cref="_scanHit"/> 复刻原来的 <c>break</c>）。</summary>
         private void OnScanTile(int tx, int ty)
         {
             if (_scanHit) return;                      // = 原 `break`

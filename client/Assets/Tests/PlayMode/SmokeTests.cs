@@ -20,7 +20,6 @@ namespace SuperMario.Tests
     /// <para>
     /// 顺路把关键画面截图到 <c>&lt;项目根&gt;/.ai-tmp/screenshots</c>：交付标准是"像原版 1-1"，
     /// 而像不像只能看画面（见 clover-engine skill 的模态自审要求）。
-    /// ⛔ 截图**不落工程树**（见 <see cref="SuperMario.Core.EvidencePaths"/>）：原先是工程内的
     /// <c>_smb_work/shots</c>，跑一次就在 <c>Assets/</c> 里留一堆 png。
     /// </para>
     /// </summary>
@@ -116,7 +115,6 @@ namespace SuperMario.Tests
             // 排帧末是调用方的责任 —— 引擎刻意不替业务排，见 `Runtime/Core/Screenshot.cs` 文件头）。
             yield return new WaitForEndOfFrame();
 
-            // 收敛到引擎 `CloverEngine.Screenshot.CaptureToFile`：原来手写的
             // `Texture2D` + `ReadPixels` + `EncodeToPNG` + `Destroy` 与 `Editor/SmokeScreenshots.cs`
             // 里那份**逐字重复**；引擎版把"目录不存在 / 屏幕尺寸非法 / 编码失败"这些失败分支
             // 统一成"返回 false + Error 留痕"（手写版是静默的），并自己销毁临时纹理。

@@ -54,7 +54,6 @@ namespace SuperMario.Module.Flow
         /// 非 null 时**共用**这一份分数/金币/命数/时间（管中密室用）。
         /// <para>
         /// 进金币房不该重置时间、出来也不该把分数洗掉 —— 原版里密室只是一关之内的一个场景。
-        /// 共用一个对象（而不是"进去时抄一份、出来时抄回来"）就不会出现两处状态漂移。
         /// </para>
         /// </param>
         public void Build(Action onReady, IScore sharedScore = null)
@@ -95,9 +94,8 @@ namespace SuperMario.Module.Flow
                     if (--_pendingPreloads > 0) return;
                     PopulateEntities();
 
-                    // ★ 地下关（1-2）的青色砖：关卡文件里它们是【地形瓦片】
+                    // 地下关（1-2）的青色砖：关卡文件里它们是【地形瓦片】
                     // （789 块 WorldTileSprites_1），而地形瓦片只参与碰撞、顶不碎 ——
-                    // 实测症状就是"1-2 的砖块顶不碎，1-1 的能"。
                     // 这里把它们换成 Brick 实体：实体自己会登记进实心位图（碰撞完全不变），
                     // 但可以被顶、被大马里奥顶碎（原版 1-2 的砖本来就是能打碎的，
                     // 打穿天花板才进得去隐藏区）。
@@ -204,7 +202,6 @@ namespace SuperMario.Module.Flow
                         _blocks.Spawn(EntityKind.QuestionBlockOneUp, new Vector2Int(tx, ty));
                         boxOneUp++;
                         break;
-                    // 下面三种是原版 1-1 里本来就有、本工程原先缺的（元素表 §2 的 B2-1 / B2-2 / B2-3）。
                     case "BrickStarman":
                         _blocks.Spawn(EntityKind.BrickStarman, new Vector2Int(tx, ty));
                         star++;
@@ -224,7 +221,7 @@ namespace SuperMario.Module.Flow
                     case "Piranha":
                         // 食人花长在**管口正中间**（它自己在格内上下伸缩）。
                         //
-                        // ⚠️ x 不是 `tx + 0.5`（"所在格中心"）—— 食人花所在的管子是**跨 2 格**的
+                        // x 不是 `tx + 0.5`（"所在格中心"）—— 食人花所在的管子是**跨 2 格**的
                         // （数据里的格 x 是管子左边那一格，见 `E 0.5 0` 对应 `T 0/1 …`），
                         // 而 clone 里食人花与它那根管子摆在**同一个 x**（都取 prefab 的 root x），
                         // 也就是**管子的中线**。本工程的格把 2 格宽管的中线落在**格边界**上，
@@ -242,7 +239,6 @@ namespace SuperMario.Module.Flow
                     case "MovingPlatform":
                         // 行程必须随数据给（prefab 的 Up/Down Stop + 实例的 Spawn Pos / directionY，
                         // 出处见 Levels/World1-2.txt 文件头）。缺了就【不生成】并报 Error ——
-                        // 退回一个"看起来合理"的默认行程等于编（§0.5），而且会静默地做成两台不一样的平台。
                         if (!e.HasPatrol)
                         {
                             Game.Logger.Error("Flow",
@@ -251,7 +247,7 @@ namespace SuperMario.Module.Flow
                                 "（值取自 clone 的 Moving Platform Vertical Spawner，见关卡文件头）");
                             break;
                         }
-                        // ⚠️ 这里**不能**像别的实体那样按格心 `floor(x)+0.5` 落位：
+                        // 这里**不能**像别的实体那样按格心 `floor(x)+0.5` 落位：
                         // 原版这一件的 `Spawn Pos` 是 **clone 场景的世界坐标**（1-1 是 `(152.8, −4)`、
                         // 1-2 是 `(137.8, 14)`，出处 `World 1-2.unity:1588/:9629` 的实例覆写），
                         // 它的 x 本来就不在格心上 —— 落格心会差 **0.3 格**（对照表 E-21 ③）。
@@ -288,7 +284,6 @@ namespace SuperMario.Module.Flow
                 // 见 StageContext.SpawnPower（1-1→1-2、1-2 两段之间、进出管中密室都要保留）。
                 playerModule.Spawn(pos, StageContext.SpawnPower ?? PowerState.Small);
                 if (StageContext.SpawnOverride.HasValue)
-                    // 出处不在这里写死节号：1-1 与 1-2 两间密室的落点分别在元素表 §3.2 / §4.2，
                     // 由 PipeWarpTable 按当前关卡给出（各那一套的 Source 里带着出处）。
                     Game.Logger.Info("Flow",
                         $"使用落点覆盖：({pos.x:F1},{pos.y:F1})（管中密室落点，见 PipeWarpTable：{PipeWarpTable.Current.Source}）");

@@ -27,10 +27,8 @@ namespace SuperMario.Module.Audio
 
     internal sealed class AudioModule : IAudio
     {
-        // ⛔ 这里**刻意不再自己记一份静音状态**（原先是 `_bgmMuted` / `_sfxMuted` 两个字段）。
         //
         // 为什么：静音的真源是引擎那份表（`Game.Sound.SetMute` 写、播放时按它算音量）。
-        // 自己再存一份，"两份状态"就必然有漂移的路径 —— 面板直接调 `Game.Sound.SetMute`、
         // 将来接引擎的设置存档、引擎侧别处改静音，都会让本地这份变旧，
         // 表现成"界面显示已静音但还有声音"（见 `ISoundManager.IsMuted` 的 XML）。
         // ⇒ 读就统一读引擎那份（同源状态）。
@@ -75,7 +73,6 @@ namespace SuperMario.Module.Audio
 
         /// <summary>
         /// 查询静音。读引擎那份同源状态（<see cref="ISoundManager.IsMuted"/>）。
-        /// 引擎未就绪时返回 <c>false</c> —— 与旧实现（本地字段默认 false）同口径。
         /// </summary>
         public bool IsMuted(SoundGroup group) => Game.Sound != null && Game.Sound.IsMuted(group);
     }

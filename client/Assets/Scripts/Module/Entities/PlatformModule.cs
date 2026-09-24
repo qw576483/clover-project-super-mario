@@ -41,7 +41,7 @@ namespace SuperMario.Module.Entities
     /// <item>离屏销毁（Unity `OnBecameInvisible`）—— `_common/DestroyOutOfScreen.cs:21-23`。</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>判"离屏"用的是游戏相机</b>，不是 `Renderer.isVisible`：编辑器里 Scene 视图也是一台相机，
+    /// <b>判"离屏"用的是游戏相机</b>，不是 `Renderer.isVisible`：编辑器里 Scene 视图也是一台相机，
     /// 而 `isVisible` 是"任意相机可见"，会让平台在编辑器里永远不被销毁（只有真机才复现）。
     /// 判据与 `OnBecameInvisible` 同义（可见 → 不可见那一刻销毁），另加一条 30 秒兜底防泄漏。
     /// </para>
@@ -55,7 +55,7 @@ namespace SuperMario.Module.Entities
     /// （没有它时池只会去 <c>Resources.Load</c> 找预制体）。
     /// </para>
     /// <para>
-    /// ⚠️ <b>名字要在"在场 / 入池"两态之间切换</b>：取证脚本 <c>tools/probes/probe.cs</c> 的
+    /// <b>名字要在"在场 / 入池"两态之间切换</b>：取证脚本 <c>tools/probes/probe.cs</c> 的
     /// <c>AllByName("MovingPlatform")</c> 是**包含非活跃对象**的全场景查找，而 <c>CountPlatforms()</c>
     /// 判的是"场上活着的平台个数"。池里的对象位置被归一化到原点（y=0 > −50），不改名就会被算进去。
     /// ⇒ 入池前改名 <see cref="InactiveName"/>、取出时改回 <see cref="Key"/>。
@@ -213,7 +213,7 @@ namespace SuperMario.Module.Entities
             if (_timer > 0f) return;
             _timer = WaitBetweenSpawn;
 
-            // ★ 走引擎对象池（`Game.Pool` + 代码工厂，见 `MovingPlatformPool` 的说明）：
+            // 走引擎对象池（`Game.Pool` + 代码工厂，见 `MovingPlatformPool` 的说明）：
             //   升降台是"高频短命物"（每 1.5 秒一台、离屏即销毁），正属 G5 要求入池的那一类。
             var p = MovingPlatformPool.Spawn(transform.parent);
             if (p == null) return;      // 池造不出（引擎已记 Error）⇒ 本周期不生成，⛔ 不静默产出空对象
@@ -258,7 +258,7 @@ namespace SuperMario.Module.Entities
     /// 所以 `Up/Down Stop` 与 `Spawn Pos` 的 y 都是**中心**的 y。</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>并入数据、不再写死在代码里</b>：行程与初速方向随关卡实体行走
+    /// <b>并入数据、不再写死在代码里</b>：行程与初速方向随关卡实体行走
     /// （`E &lt;x&gt; &lt;y&gt; MovingPlatform &lt;downStopY&gt; &lt;upStopY&gt; &lt;startDir&gt;`），
     /// 见 <see cref="LevelEntity.HasPatrol"/>。所以这个类里**没有任何"行程"常量** ——
     /// 换关卡/换 spawner 只改数据，不动代码。
@@ -304,7 +304,7 @@ namespace SuperMario.Module.Entities
 
         public void Init(ILevel level, Vector2 spawnPos, float downStopY, float upStopY, int startDir)
         {
-            // ★ 本对象可能是从对象池**复用**回来的（引擎 `Game.Pool`，见 `MovingPlatformPool`）：
+            // 本对象可能是从对象池**复用**回来的（引擎 `Game.Pool`，见 `MovingPlatformPool`）：
             //   所有运行时状态必须在这里复位。漏一项就会把上一台的残留带进这一台 ——
             //   例如 `_wasVisible` 漏清 ⇒ 新台子还没进过画面就被判"可见过 → 现在不可见"而立刻回收。
             _level = level;
@@ -322,7 +322,7 @@ namespace SuperMario.Module.Entities
 
             // 台面贴图（3 格宽 × 半格厚）。prefab 的精灵 pivot 是【居中】，本工程 `Sprites/Platform/`
             // 走 `SpriteImportPostprocessor` 的"居中轴心"一档，所以直接挂在台面中心即可。
-            // ⚠️ Art 子节点**只建一次**：复用的对象上已经有它，每次 Init 都建会越挂越多。
+            // Art 子节点**只建一次**：复用的对象上已经有它，每次 Init 都建会越挂越多。
             if (!_built)
             {
                 _built = true;
@@ -339,8 +339,6 @@ namespace SuperMario.Module.Entities
                             $"升降台台面贴图加载失败：{ResPaths.Platform(SpriteNames.MovingPlatform)}");
                         return;
                     }
-                    // 回调是异步的：期间这台可能已被回收、甚至随引擎 Shutdown 被销毁（入池后生命周期变长，
-                    // 这个窗口比原来更宽）⇒ 写之前判一次。
                     if (_sr == null) return;
                     _sr.sprite = s;
                 });
@@ -358,7 +356,7 @@ namespace SuperMario.Module.Entities
         /// <summary>
         /// 把台面覆盖到的每一格登记成实心 + 登记台面真实顶高；先注销上一帧的那批格。
         /// <para>
-        /// ⚠️ 只注销**我们自己加进去的**格：台面横跨 3 格，其中有可能压在**地形**上
+        /// 只注销**我们自己加进去的**格：台面横跨 3 格，其中有可能压在**地形**上
         /// （例：x=152.8 的台面覆盖 151..154 格，而 151 格在 y=−2/−1 是地面）——
         /// 无脑 `SetSolid(false)` 会把地形删掉，平台走过后马里奥从地面掉下去（静默、无报错）。
         /// </para>
@@ -402,7 +400,7 @@ namespace SuperMario.Module.Entities
             else
             {
                 _y += Speed * dt * _dir;
-                // ⚠️ 反向必须带上"**正朝着这个止点走**"（`_dir` 的符号）这个条件。
+                // 反向必须带上"**正朝着这个止点走**"（`_dir` 的符号）这个条件。
                 // 只看 `_y >= 上止点` 的话，`dt == 0` 时（`Time.timeScale = 0`：暂停 / 结算屏）
                 // `_y` 会**恰好停在**止点上，于是每帧都判"到点了"⇒ 反向 + 打日志每帧一次（实测踩过）。
                 if (_dir > 0 && _y >= _upStopY) { _y = _upStopY; _dir = -1; _wait = WaitAtStop; LogStop(true); }
@@ -480,8 +478,8 @@ namespace SuperMario.Module.Entities
             _cells.Clear();
             _cellsPreexisting.Clear();
 
-            // ★ 归还引擎对象池（不是 Destroy）：对象留着下次复用，位置由池归一化到原点。
-            //   ⛔ 归还之前必须已经注销上面那批实心格 —— 池里的对象不是"场上活着的平台"，
+            // 归还引擎对象池（不是 Destroy）：对象留着下次复用，位置由池归一化到原点。
+            //   归还之前必须已经注销上面那批实心格 —— 池里的对象不是"场上活着的平台"，
             //      带着实心格回去会让它在场外继续挡人。
             MovingPlatformPool.Despawn(this);
         }

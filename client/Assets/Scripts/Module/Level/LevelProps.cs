@@ -23,7 +23,7 @@ namespace SuperMario.Module.Level
 
         public static void Build(ILevel level, Transform parent, Action onDone)
         {
-            // ★ 池化取舍：本文件的 5 处 `new GameObject`（Props 根 / 杆身 / 顶球 / 旗子 / 城堡）
+            // 池化取舍：本文件的 5 处 `new GameObject`（Props 根 / 杆身 / 顶球 / 旗子 / 城堡）
             //   各 1 个、生命周期 = 一整关，**不进对象池** —— 池化只在"一局里反复生成销毁"时才划算。
             var root = new GameObject("Props").transform;
             root.SetParent(parent, false);
@@ -52,7 +52,6 @@ namespace SuperMario.Module.Level
                 }
             }
 
-            // ★ 这里【曾经】有一个 5 秒看门狗，已删除 —— 它的前提是**错的**，留着是"假 Error"的源头。
             //
             // 旧前提（原注释原文）："资源模块对'路径不存在'的加载【不会调用回调】（不是回 null）"。
             // 回读引擎实现后确认与契约不符：
@@ -110,10 +109,9 @@ namespace SuperMario.Module.Level
             });
 
             // 旗子：挂在杆上、初始靠近顶端；马里奥抓住杆下滑时由 PlayerActor 带着一起往下降。
-            // 踩过的坑：这里原先【只建了杆身和顶球，没建旗子】—— 原版旗杆上是有一面旗的，
             // 少了它就是"杆子光秃秃"（而且定义好的 SpriteNames.Flag 没人用，属于写了没接）。
             //
-            // ★ 建好后【登记到 StageContext】而不是让 PlayerActor 按名字 Find（历史债 E-5）：
+            // 建好后【登记到 StageContext】而不是让 PlayerActor 按名字 Find（历史债 E-5）：
             // 谁建谁登记，名字就不再是契约。登记点在加载回调里 —— 若这里没跑到，宁可让
             // PlayerActor 在滑杆时打一条 Warn（明确暴露），也不要"按名字找得到就悄悄对、找不到就悄悄错"。
             Game.Res.LoadAsset<Sprite>(ResPaths.Flagpole(SpriteNames.Flag), sp =>

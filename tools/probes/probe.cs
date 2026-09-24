@@ -1,6 +1,5 @@
-// 一次性实机驱动探针（用完即删，见全局 skill §1.8）。
 // 用法：unity command run_script --file <本文件> --entry Probe.<场景>
-//   ⚠️ 入口是 void 且**立刻返回**（fire-and-forget）：run_script 的传输层 30 秒超时，
+//   入口是 void 且**立刻返回**（fire-and-forget）：run_script 的传输层 30 秒超时，
 //   而一个场景要跑十几秒到几十秒。场景自己往游戏日志里写 "场景结束：<name>" 当完成标记。
 //
 // 按键注入必须走 Game.AttachInput 桩（验收表 E-11）：本机编辑器窗口最小化 + 管理员权限，
@@ -18,10 +17,7 @@ using UnityEngine;
 
 public static class Probe
 {
-    // ★ 取证截图是**一次性产物**（skill §1.8 / `reference/workflow-and-standards.md`「临时文件」）：
-    //   落 `<项目根>/.ai-tmp/screenshots/`，跟 `.ai-tmp/` 一起被 gitignore，⛔ 不进 `client/Assets/**`。
-    //   原来写的是 "Assets/Screenshots" —— 197 张图进了游戏工程 = 6.4 MB，交付前才清理，
-    //   还得回头改验收表 18 处引用（用户 2026-09-20 点名）。跑 Unity 时 cwd = client/ ⇒ 用 "../"。
+    //   落 `<项目根>/.ai-tmp/screenshots/`，跟 `.ai-tmp/` 一起被 gitignore，不进 `client/Assets/**`。
     private const string ShotDir = "../.ai-tmp/screenshots";
 
     public static void L(string m) => Game.Logger.Info("Probe", m);
@@ -33,18 +29,15 @@ public static class Probe
         private readonly IInputManager _real;
         private readonly HashSet<GameKey> _held = new HashSet<GameKey>();
 
-        // ★ 边沿（GetKeyDown / GetKeyUp）语义必须与【真后端】一致：真管理器的
+        // 边沿（GetKeyDown / GetKeyUp）语义必须与【真后端】一致：真管理器的
         //   `GetKeyDown` = `!IsLocked && _backend.GetKeyDown`，后端落到 Unity 的
         //   `Input.GetKeyDown` / `wasPressedThisFrame` —— **只在按下那一帧为 true**。
         //
         //   原实现把"按下过的键"永远留在 `_down` 里（只 Add、从不 Clear）⇒ 一次按下之后
-        //   `GetKeyDown(该键)` **恒为 true**。后果（2026-09-18 实测，两个都是它）：
         //     · `AppFlow.TickResult` 每帧都判"按了 SPACE"⇒ `→ Result` 之后 **14 毫秒**就
         //       `CloseAll()` + 反复 `Scene.Load(Menu)`（日志里 `Loading scene: Menu` 每帧一条）
-        //       ⇒ 结算面板被销毁、关卡会话被释放 ⇒ 连拍 6 秒全是纯色（登记为 E-17 的那个"缺陷"）。
         //     · `TickStage`/`TickPause` 每帧互相切换 ⇒ `→ Pause` 在 0.55 秒里刷 40 条，
         //       面板每帧被建又被销毁 ⇒ 抓拍/注册表查询随机落在有/无面板的那一帧（E-18）。
-        //   修法：Hold 只写 pending，由**每帧的 Tick()** 提升成本帧边沿、下一帧清掉。
         //   `Game.Tick` 的顺序是 `Input.Tick()` → `Timer` → `Fsm.Tick()`（Game.cs:709-712），
         //   所以本帧提升的边沿本帧就能被状态机读到 —— 与真后端逐帧语义相同。
         private readonly HashSet<GameKey> _down = new HashSet<GameKey>();
@@ -174,7 +167,6 @@ public static class Probe
             UnityEngine.Object.Destroy(tex);
             File.WriteAllBytes(path, bytes);
             // 机位一并落盘：离线脚本要靠 (camX, camY, 正交半高) 才能把像素换算回世界格
-            // （判定由脚本做，见 skill §1.12 第 1 条）。
             var c = Camera.main;
             L($"PROBE shot {path} 字节={bytes.Length} 分辨率={tw}x{th} " +
               $"机位={(c == null ? "无相机" : $"x={c.transform.position.x:F2} y={c.transform.position.y:F2} 正交半高={c.orthographicSize:F2}")}");
@@ -207,7 +199,6 @@ public static class Probe
     /// 字号 48 的文字只有约 25 像素高、笔画宽几像素 —— 网格很可能整个跳过文字，
     /// 于是"黑底 + 一行字"的结算屏会被判成"退化帧"（本工程结算屏本来就是 0.95 黑底，见 ResultPanel.Awake）。
     /// 这里扫全图，判据是**唯一色数**：纯色帧 = 1，有内容的帧远大于 1。
-    /// ⚠️ 这里只是探针侧的**粗判**（决定要不要重拍）；正式判定由离线脚本对 PNG 做（§1.12 第 1 条）。
     /// </para>
     /// </summary>
     private static void ColorStats(Texture2D tex, out int unique, out Color32 modal, out float modalFrac)
@@ -299,11 +290,8 @@ public static class Probe
         return false;
     }
 
-    // ───────────────────── 出图闸门 + 运行时读数（2026-09-19 任务书-修取证缺陷）─────────────────────
     //
-    // 为什么加（两处实测缺陷，都不是"拍歪了"，是"拍了不该拍的屏"）：
     //   ① `menu` 场景那次在 `fsm=Loading` 时启动 ⇒ 拍出 12 张**入场卡**当标题屏，并且**覆盖**了
-    //      原来的好帧（旧口径只看"是不是单色"，入场卡有字 ⇒ 判"非退化" ⇒ 照样落盘）。
     //   ② `reshoot` 场景里马里奥被乌龟撞死 ⇒ 整关重开 ⇒ 后面 5 张图是重开后的画面（机位 x=0.00）。
     // 所以出图前先判**状态/机位/读数**（由调用方给），不过就**一个字节都不写** —— 坏帧再也覆盖不了好帧。
 
@@ -418,9 +406,7 @@ public static class Probe
     /// 把 <paramref name="x"/> 附近的栗宝宝**直接清掉**（`IEnemy.Flip()` = 撞飞 ⇒ 立刻 Dead、不参与判定），
     /// 返回清掉的个数。
     /// <para>
-    /// ⚠️ 为什么不用旧的 <see cref="ClearGoombasNear"/>：那条路是"把马里奥摆到栗宝宝**头上**去踩"，
-    /// 踩的过程中他自己会贴到别的敌人 ⇒ 实测 2026-09-19 17:07：清场时被降级 Big→Small、两秒后**死亡**，
-    /// 于是 #48 的连顶直接崩掉（币只到 2）。这里改成"人不动、敌人被撞飞"，一个接触都不发生。
+    /// 为什么不用旧的 <see cref="ClearGoombasNear"/>：那条路是"把马里奥摆到栗宝宝**头上**去踩"，
     /// </para>
     /// </summary>
     private static int KillGoombasNear(float x, float range)
@@ -451,7 +437,6 @@ public static class Probe
     /// 在 <paramref name="want"/> 附近找一格"**脚下有地板**、身上没有实心格"的落点并返回它的 x。
     /// <para>
     /// 为什么必须有：`Teleport(x, y)` 只写坐标、不看地形 —— 摆到坑的上方，人**直接掉出世界**
-    /// （实测 2026-09-19 17:01：`tp → (87.94,-3.00)` 之后立刻 `死亡`，随后 fsm=Loading，后面几张图全废）。
     /// 1-1 的地板顶 = y=-3 ⇒ 实心格在 y=-4（离线查法：`.ai-tmp/test/ground_gaps_11.py`）。
     /// 判据用关卡自己的实心位图（`ILevel.IsSolidTile`），不是我们的猜测。
     /// </para>
@@ -474,7 +459,6 @@ public static class Probe
 
     /// <summary>
     /// 等到"关卡 + 玩家都处于可拍状态"（死了 / 正在重开就等它重开完）。**要等就说明出了意外**
-    /// （正常路径不该死），所以等待这件事本身也打进日志 —— 非预期分支必须留痕（skill §7）。
     /// </summary>
     private static async Task<bool> EnsureStage(string tag)
     {
@@ -490,7 +474,7 @@ public static class Probe
     /// 抢「面板 / 入场卡**确实画在屏幕上**」的帧：判据 = **深色像素占比 ≥ minDark**
     /// （结算屏 = 0.95 黑遮罩、入场卡 = 纯黑底）。
     /// <para>
-    /// ⚠️ 为什么不能用 <see cref="ShotSolid"/>：它用 <see cref="IsFlat"/> 的 20x20 **稀疏网格**判"空帧"，
+    /// 为什么不能用 <see cref="ShotSolid"/>：它用 <see cref="IsFlat"/> 的 20x20 **稀疏网格**判"空帧"，
     /// 而"黑底 + 一行字"的卡/结算屏正好会被整个网格跳过 ⇒ 被判成空帧 ⇒ 它继续重拍 ——
     /// **每次都覆盖同名文件**，最后留下的是"卡已经过去、关卡画面出来了"的那一帧。
     /// 实测：`intro_card.png` / `intro_lives_check.png` 一直都是**关卡画面**，表里却写着"黑底 + WORLD 1-1 + ×3"。
@@ -692,9 +676,7 @@ public static class Probe
         var m = flow.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance);
         if (m == null) { L($"PROBE 反射失败：AppFlow 上没有 {method}"); return; }
 
-        // ★ 目标方法带【可选参数】时（例如 `NextLevel(bool silent = false)`），
-        //   反射传空数组会抛 TargetParameterCountException（实测 2026-09-20：改了签名之后
-        //   `Enter12()` 立刻在这里炸，而报错只写"参数个数不匹配"，看着像脚手架坏了）。
+        // 目标方法带【可选参数】时（例如 `NextLevel(bool silent = false)`），
         //   这里按声明把默认值补上，签名再变也不会哑掉。
         var ps = m.GetParameters();
         if (args.Length != ps.Length)
@@ -779,7 +761,6 @@ public static class Probe
     /// <summary>
     /// 场景收尾：**把"死亡 → 重开本关"的等待走完，再回主菜单** —— 一个 Play 会话里连跑多个场景时必须这么做。
     /// <para>
-    /// 两个都是实测踩出来的（2026-09-19 17:40，日志可复算）：
     /// <list type="number">
     /// <item>`AppFlow._deathTimer` 只在 `HandleDeathResolved()` 里复位（`AppFlow.cs:691`），而
     ///       `PendingDeath` 还没结算就发 `BackToMain` ⇒ 这个计时器**留给下一个场景**，下一个场景跑到一半
@@ -820,7 +801,6 @@ public static class Probe
     /// <summary>
     /// 把马里奥**稳到** 1-2 主关的 (x,y)：先等"关卡是 1-2 + 人活着"，再摆位、再确认；
     /// 中途被"开局死亡 → 重开"打断就再来一轮（最多 6 轮）。
-    /// 出处：1-2 出生点开局必被撞死是既存缺陷（验收表「取证缺陷登记」⑧），探针只能容忍它、不能假设它不存在。
     /// </summary>
     private static async Task<bool> Settle12(float x, float y, string tag)
     {
@@ -1056,7 +1036,7 @@ public static class Probe
         L($"PROBE 诊断机位：fsm={FsmNow} timeScale={Time.timeScale} 目标 camY={camY:F2} 正交半高={ortho:F2} " +
           $"进入时平台 y={P(FindByName("MovingPlatform", 152f)).y:F3}");
         await Wait(0.25f);                              // 等这一机位渲染出来（暂停中世界是冻的，等待无副作用）
-        // ★ 冻结 y 必须在**拍之前那一瞬间**再读一次：进这一机位之前世界还在跑（平台 3 格/秒），
+        // 冻结 y 必须在**拍之前那一瞬间**再读一次：进这一机位之前世界还在跑（平台 3 格/秒），
         //   而且 spawner 会换台 —— 用"进入时"的读数配"拍到的另一台"就是上一次 PL2 判 FAIL 的原因。
         var plat = FindByName("MovingPlatform", 152f);
         // spawner 是"每 1.5 秒一台"的传送带 ⇒ 同一条 x 上可能同时有 2~3 台（相差 4.5 格）⇒
@@ -1078,7 +1058,7 @@ public static class Probe
     private static async Task PlatformBody()
     {
         await Enter12();
-        // ⚠️ 平台是 spawner 生成的，而 spawner **只在马里奥水平 40 格内才生成**
+        // 平台是 spawner 生成的，而 spawner **只在马里奥水平 40 格内才生成**
         //    （出处 `MovingPlatformVerticalSpawner.cs:15`）⇒ 先站到它旁边，否则一台都不会出现
         //    （实测：不挪马里奥时本场景 4 秒就空跑结束）。
         Teleport(145f, 0f);
@@ -1097,8 +1077,8 @@ public static class Probe
           $"平台B {dnB:F1}..{upB:F1} = {upB - dnB:F1} 格；prefab = -6.5..16.5 = 23 格");
 
         // ── ① 带人：等一台走到画面中段（y≈2，±0.3），再把马里奥精确放到它**台面顶**上 ──
-        //   ⚠️ 台面是 3 格宽 × **半格厚**、transform 在台面中心 ⇒ 脚底 = 中心 + 0.25 格。
-        //   ⚠️ 不能"传送到它当前的位置"：它以 3 格/秒上升，0.8 秒后就走了 2.4 格（实测会踩空）。
+        //   台面是 3 格宽 × **半格厚**、transform 在台面中心 ⇒ 脚底 = 中心 + 0.25 格。
+        //   不能"传送到它当前的位置"：它以 3 格/秒上升，0.8 秒后就走了 2.4 格（实测会踩空）。
         var pr = await WaitPlatformNearY(152.8f, 2f, 0.3f, 25f);
         if (pr != null)
         {
@@ -1126,7 +1106,7 @@ public static class Probe
         State("站到坑边（观察位）");
 
         // ── ③ 速度 + **一台的生命周期**采样 ──
-        // ⚠️ 现在是 spawner：一台平台从出现点升到画面外就被销毁，**不会**在 [−6.5, 16.5] 之间往返 ——
+        // 现在是 spawner：一台平台从出现点升到画面外就被销毁，**不会**在 [−6.5, 16.5] 之间往返 ——
         //    所以"整周期 min/max"这个口径已经不成立（旧的 22.9 格跨度是"常驻平台往返"时代的读数）。
         //    新口径：跟住"离 x=152.8 最近的那一台"，量它的速度；它被销毁时（引用变成另一个对象）
         //    把上一台的 min/max 报出来 = **一台的实际行程**。
@@ -1167,7 +1147,7 @@ public static class Probe
         L($"PROBE 速度实测（格/秒）={string.Join(" ", slopes)}（prefab: `absSpeed 0.05`/帧 ×60fps = 3.00）");
 
         // ── ④ 上/下止点各一张（诊断机位，见方法头部的说明）──
-        // ⚠️ 现在这一台是**spawner**：平台每 1.5 秒生成一台、离屏即销毁（原版行为）。
+        // 现在这一台是**spawner**：平台每 1.5 秒生成一台、离屏即销毁（原版行为）。
         //    所以不能抓着"某一个平台对象"等它走到止点（它可能先被销毁）——
         //    每次轮询都**重新找最近的那一台**。
         var plDn = await WaitPlatformNearY(152.8f, dnA, 0.2f, 25f);
@@ -1407,7 +1387,7 @@ public static class Probe
         var data = StageContext.Level?.Data;
         L($"PROBE level[#45] 瓦片={data?.Tiles.Count} 实体={data?.Entities.Count} " +
           $"范围 x[{data?.MinTileX},{data?.MaxTileX}] 地面顶={StageContext.Level?.GroundTopY}");
-        // ⚠️ 拍装饰帧之前先把**画面里的栗宝宝**Flip 掉：原版整关海报上没有任何精灵，
+        // 拍装饰帧之前先把**画面里的栗宝宝**Flip 掉：原版整关海报上没有任何精灵，
         //    而 1-1 最左那只栗宝宝会一路向左走到 x≈-1 的那座山丘上（本轮实测：它把山丘挡了一格，
         //    脚本量"绿色列区间"时那一段的中心偏 0.33 格 ⇒ #54 的逐段比对差 0.72 格、判 FAIL）。
         //    这一帧要证的是**装饰**（#53/#54），敌人的判据在 #9/#10/#46 —— 所以清掉它们是对的判据准备，
@@ -1448,7 +1428,6 @@ public static class Probe
         DumpBlocks("#47 之后（找 (50,1)）");
 
         // 剩下三块（#49 星砖 / #46 绿龟 / #48 多金币砖）抽成 BlockBumpPart —— 单独一个入口也能只重采这三行：
-        // 采集即冻结（skill §2 第 4 条）：#45 的 12-blocks-group 与 #47 的两帧**已经拍好并冻结**，
         // 重跑整个 reshoot 会把它们再拍一遍（同一行采到第 3 次），所以补采走 `Probe.BlockBumps`。
         await BlockBumpPart();
     }
@@ -1469,7 +1448,6 @@ public static class Probe
         }
         State("补采起点");
         // 这一段要跑 ~25 秒，中间人要停在砖下站/跳十几次 —— 1-1 这一段有栗宝宝以 ~1.2 格/秒往左走，
-        // 实测 2026-09-19 17:07/17:12 两次都是**被栗宝宝撞死**（17:07 在清场时被降级→死；17:12 在第 5 次
         // 连顶时死，币只到 4）。所以先把 x∈[40,120] 的栗宝宝**撞飞**（`IEnemy.Flip()`：人不接触、不移动，
         // 只把会来撞人的那几只清掉）—— 这三行的判据是砖块行为 + HUD 读数，与敌人无关；
         // 乌龟**不清**（#46 要它活着走路）。清场这件事写进联络图的格上注。
@@ -1480,12 +1458,11 @@ public static class Probe
         var ko = koopa as SuperMario.Module.Entities.IEnemy;
         if (koopa == null || ko == null || ko.Dead) L("PROBE 警告：找不到（活的）乌龟");
 
-        // ── #49 星砖 (87,0)：顶出★ **并真吃到** ──
-        // ★ 这一段**挪到 #46 之后**再跑，而且判据不再接受"★在画面里"这种弱化版（任务书-收尾三项 第 2 条）。
+        // ── #49 星砖 (87,0)：顶出**并真吃到** ──
         //   两个理由：
         //   ① 次序：#49 一旦真吃到星，马里奥就有 10 秒"碰谁杀谁"（`StarInvincible`）—— 而 #46 要那只
         //      乌龟**活着走路**并量位移 ⇒ 先量 #46，再吃星（原次序是先 #49 后 #46，那时人吃不到星所以没暴露）。
-        //   ② 判据：见下面 `#49 星砖` 段的注释（站到★必经路径上等它走过来）。
+        //   ② 判据：见下面 `#49 星砖` 段的注释（站到必经路径上等它走过来）。
         // 这里只留一句提示，真正的动作在 #46 之后。
         L("PROBE #49 排在 #46 之后执行（先量乌龟，再吃星；见本段注释）");
 
@@ -1497,9 +1474,7 @@ public static class Probe
         else
         {
             // ① 落点必须是"脚下有地板、身上没有实心格"的格：`Teleport` 只写坐标，摆到坑上方会直接
-            //    掉出世界（实测 2026-09-19 17:01 摆到 x=87.94 立刻 `死亡`）。1-1 的地板顶 = y=-3，
             //    实心格在 y=-4（离线查法 `.ai-tmp/test/ground_gaps_11.py`）。
-            // ② 人在乌龟**右**侧 5 格：它向左走，离人越来越远（原来摆左侧 3 格 = 迎头撞上）。
             // ③ 站之前先把附近的栗宝宝撞飞（人不动、不接触）—— 否则站 1.3 秒必被撞死。
             var mx = SafeGroundX(P(koopa).x + 5.0f, -3f);
             KillGoombasNear(mx, 10f);
@@ -1519,12 +1494,11 @@ public static class Probe
             await EnsureStage("#46 之后");
         }
 
-        // ── #49 星砖 (87,0)：顶出★ **并真吃到**（判据 = `吃到无敌星`，⛔ 不接受"★在画面里"）──
+        // ── #49 星砖 (87,0)：顶出**并真吃到**（判据 = `吃到无敌星`，不接受"在画面里"）──
         // 为什么这样写（逐条都是实测踩出来的）：
-        //   ① 判据的语义（任务书-收尾三项 第 2 条）：#49 = "顶出★ **并吃到**" ⇒ 断言必须是
-        //      `[Block] 无敌星砖 (87,0)：顶出★` **且** `[Player] 吃到无敌星：10 秒内碰谁杀谁` 两条。
-        //   ② 上一版拍"★刚弹出来那一瞬"的理由是"人不追就吃不到" —— 那是**探针走位不对**，
-        //      不是判据该让步。★ 的移动逐项有出处（`Module/Entities/ItemModule.cs` 的 `StarItem.Update`）：
+        //      `[Block] 无敌星砖 (87,0)：顶出` **且** `[Player] 吃到无敌星：10 秒内碰谁杀谁` 两条。
+        //   ② 上一版拍"刚弹出来那一瞬"的理由是"人不追就吃不到" —— 那是**探针走位不对**，
+        //      不是判据该让步。的移动逐项有出处（`Module/Entities/ItemModule.cs` 的 `StarItem.Update`）：
         //      `_dir = 1`（向右）、水平 **3 格/秒**、落地按 `GameConst.StarBounce`(11.25) 弹起
         //      ⇒ 它是"沿地面向右跳着走"，**不会回头**。所以正确做法是**站到它必经路径上不动**等它来。
         //   ③ 路径上不能有活敌人：先量完 #46（乌龟要活着走路），再把 1-1 那只乌龟撞飞 ——
@@ -1536,7 +1510,7 @@ public static class Probe
         L($"PROBE #49 顶星砖：starItem={StarItemExists()} " +
           $"power={(StageContext.Player == null ? "?" : StageContext.Player.Power.ToString())} " +
           $"（上一行 `[Block] 无敌星砖 (87,0)：顶出★` 是砖自己的日志）");
-        // ★ 从砖上弹出后沿地面向右走 3 格/秒 ⇒ 站到它右边 5 格的地面上等（不作任何按键）。
+        // 从砖上弹出后沿地面向右走 3 格/秒 ⇒ 站到它右边 5 格的地面上等（不作任何按键）。
         var eatX = SafeGroundX(92.5f, -3f);
         Teleport(eatX, -3f);
         L($"PROBE #49 站到★的必经路径上等它：x={eatX:F2}（★ 从砖 (87.5,·) 向右跳着走，3 格/秒）");
@@ -1562,8 +1536,7 @@ public static class Probe
 
         // ── #48 多金币砖 (80,0)：连顶 11 次（前 10 次出币、第 11 次不再出）──
         await EnsureStage("#48");
-        // ⚠️ 用"撞飞"而不是旧的 `ClearGoombasNear`（后者把人摆到栗宝宝头上踩，过程中自己会贴到别的敌人：
-        //    实测 2026-09-19 17:07 清场时被降级 Big→Small、两秒后死亡 ⇒ #48 崩掉）。连顶要 16 秒，
+        // 用"撞飞"而不是旧的 `ClearGoombasNear`（后者把人摆到栗宝宝头上踩，过程中自己会贴到别的敌人：
         //    这 16 秒里身边不能有活敌人（半径 40：连顶期间从更右走过来的也在路上就清了）。
         KillGoombasNear(80.5f, 40f);
         // 连顶要 16 秒：小马里奥一下就没，大马里奥被撞一次只是降级 ⇒ 先补成大的（形态与本行判据无关，
@@ -1603,7 +1576,7 @@ public static class Probe
 
     /// <summary>
     /// 转储终点装饰（旗杆杆身 / 顶球 / 旗 / 城堡）。
-    /// ⚠️ 它们是 <c>LevelProps</c> 用 <c>new GameObject(...)</c> 建的**裸对象**（没有 MonoBehaviour），
+    /// 它们是 <c>LevelProps</c> 用 <c>new GameObject(...)</c> 建的**裸对象**（没有 MonoBehaviour），
     /// 所以 <c>FindByName</c> 那条路找不到 —— 必须按 Transform 找。
     /// </summary>
     private static void DumpProps(string tag)
@@ -1625,14 +1598,13 @@ public static class Probe
         L($"PROBE props[{tag}] 共 {found} 件");
     }
 
-    // ═══════════ 2026-09-18 追加：补齐"过期证据"需要的状态（走真实流程入口，不自己造状态）═══════════
 
     // ═══════════ 场景：1-2 末尾审计（用户报：悬空 / 横管方向 / 过关穿墙）═══════════
 
-    // ⚠️ 已停用：这个场景断言的是【旧设计】——它按 `lv.FlagpoleTouchX` 摆位走"过关段"，
+    // 已停用：这个场景断言的是【旧设计】——它按 `lv.FlagpoleTouchX` 摆位走"过关段"，
     //    而 1-2 地下段现在**没有旗杆**（旗杆搬到了地表段，见 LevelData.HasFlagpole）⇒
     //    它算出来的位置指向一个不存在的终点，跑出来的任何结论都是假的（假证据源）。
-    //    1-2 结尾的现行断言在 `Section12`。留着这行只为保留 diff 线索，⛔ 别再跑它。
+    //    1-2 结尾的现行断言在 `Section12`。留着这行只为保留 diff 线索，别再跑它。
     // public static void Audit12() => Start("audit12", Audit12Body);
 
     /// <summary>
@@ -1665,8 +1637,8 @@ public static class Probe
             if (mb == null) continue;
             var nm = mb.gameObject.name;
             if (!nm.StartsWith("Block_", StringComparison.Ordinal)) continue;
-            // ★ 格坐标**从名字里解析**：`Block_{kind}_{x}_{y}`（BlockModule 里就是这么起的）。
-            //   ⛔ 不要用 `FloorToInt(transform.position)` 反推 —— 方块贴图有"居中轴心"和"底部轴心"两种
+            // 格坐标**从名字里解析**：`Block_{kind}_{x}_{y}`（BlockModule 里就是这么起的）。
+            //   不要用 `FloorToInt(transform.position)` 反推 —— 方块贴图有"居中轴心"和"底部轴心"两种
             //   （见 BlockModule 的对齐注释），中心轴心时 position.y = 格中心 ⇒ 反推会**偏一格**。
             //   实测踩过：把 `Block_..._64_0`（格 0）反推成格 -1，于是拿"底边 -1"去判"应停在 -0.75"，
             //   把一次**完全正确**的顶砖判成了 FAIL（假 FAIL，同样是假证据）。
@@ -1699,7 +1671,7 @@ public static class Probe
         var pass = false; string verdict = "没试过";
         for (var k = 0; k < Mathf.Min(4, cands.Count); k++)
         {
-            // ⚠️ 候选是**开场时**抓的快照：之前几次尝试里马里奥可能被撞死 / 掉坑 ⇒ 整关重开 ⇒
+            // 候选是**开场时**抓的快照：之前几次尝试里马里奥可能被撞死 / 掉坑 ⇒ 整关重开 ⇒
             //    方块 GameObject 全部重建，旧引用已被销毁（实测：读 `pick.transform` 抛 MissingReference）。
             if (cands[k].go == null) { verdict += $" [{cands[k].name} 已随重开销毁，跳过]"; continue; }
             var pick = cands[k].go;
@@ -1722,7 +1694,7 @@ public static class Probe
             var p0 = StageContext.Player;
             if (p0 == null) { L("PROBE headhit 马里奥没了"); return; }
 
-            // ★ 先确认"就位"再起跑 —— 否则这一跳可能打的是空气（实测：上一次尝试掉出世界死了、
+            // 先确认"就位"再起跑 —— 否则这一跳可能打的是空气（实测：上一次尝试掉出世界死了、
             //   整关重开，人被放回出生点 x=-10.5，后面的采样全是"在空地上跳"，方块位移恒为 0，
             //   而结论照样会写出来 = 假证据）。
             var at = p0.FeetPosition;
@@ -1760,7 +1732,7 @@ public static class Probe
                 var f = p.FeetPosition;
                 var bd = 0f;
                 if (pick != null) { bd = Mathf.Abs(pick.transform.position.y - bump0); if (bd > maxBump) maxBump = bd; }
-                // ★ 只统计"人正在方块正下方"的那几帧 —— 这才是"顶到它"的判据窗口。
+                // 只统计"人正在方块正下方"的那几帧 —— 这才是"顶到它"的判据窗口。
                 if (Mathf.Abs(f.x - (c0.x + 0.5f)) <= 0.8f)
                 {
                     samples++;
@@ -1895,7 +1867,7 @@ public static class Probe
               $"busy={q0.Busy} grounded={q0.Grounded} alive={q0.Alive} fsm={FsmNow}");
         }
 
-        // ⚠️ 地表段 x=2..10 是原版那座 1..8 级台阶（`Brown Marble Finish 1.prefab`）。
+        // 地表段 x=2..10 是原版那座 1..8 级台阶（`Brown Marble Finish 1.prefab`）。
         // 马里奥不能"走"上 1 格高的坎（同 SMB），所以这里必须边右走边跳 —— 只按右会卡在第二级。
         _stub.Hold(GameKey.RightArrow, true);
         for (var i = 0; i < 170; i++)
@@ -1909,7 +1881,7 @@ public static class Probe
             if (p != null && i % 5 == 0)
                 L($"PROBE walk12end(地表) t={i * 0.2:F1} x={p.FeetPosition.x:F2} y={p.FeetPosition.y:F2} " +
                   $"busy={p.Busy} grounded={p.Grounded} fsm={FsmNow}");
-            // ⚠️ 顺序要紧：Result 一进关卡会话就拆了，Player 变 null ——
+            // 顺序要紧：Result 一进关卡会话就拆了，Player 变 null ——
             // 先判结算再判空，否则永远拍不到结算屏（实测踩过）。
             if (FsmNow == "Result")
             {
@@ -1917,8 +1889,6 @@ public static class Probe
                 // 权威判据：注册表 / 实例数 / 递归节点树（含文字内容——面板上写的就是这些 TEXT）
                 DumpPanels("结算");
                 // 判"面板真的画在画面上"：结算屏 = 0.95 黑遮罩 ⇒ 用"大面积深色"当完成判据。
-                // （原先用 ShotOk 的"唯一色 ≥ 3"——天空本身就是几百种颜色，所以面板还没画上来
-                //   它就立刻接受了，实测拍到过"只有关卡、没有结算屏"的帧）
                 await ShotPanel("walk12end-5-result");
                 break;
             }
@@ -1939,7 +1909,7 @@ public static class Probe
     //   地下段结尾：`World1-2.txt` 的 `# side-exit 163 3`（= 原版整关海报上那根
     //     `Warp Green Pipe Side Short` 的管口面；落格口径见该文件头）；墙顶 y=3（墙 x=157..173,y=0..2）。
     //   地表段：`World1-2-Surface.txt` 的 `# spawn 1 2` / `# flagpole 19 0` / `# castle 25 2`。
-    //   ⚠️ 下面这些摆位坐标一律**从关卡数据取**（`lv.SideExitFaceX`），⛔ 不在探针里写死 ——
+    //   下面这些摆位坐标一律**从关卡数据取**（`lv.SideExitFaceX`），不在探针里写死 ——
     //      写死过一次的后果：管口从 165 挪到 163 后，探针把马里奥摆进了管口**内部**（身处实心格）。
 
     public static void Section12() => Start("section12", Section12Body);
@@ -1957,15 +1927,12 @@ public static class Probe
         L($"PROBE section12 管口面=({faceX},{faceY}) ⇒ A1 摆位用 faceX-3/faceX-2/faceX-1");
 
         // ── A1：站在墙顶 ──
-        // ★ 摆位改成 `Settle12` + 出图改成 `ShotGated`（2026-09-19 17:40 实测：这三张曾被"没有会话的空屏"
-        //   —— 12742 字节、机位 x=0.00 y=0.00 —— 覆盖掉，根因见 `TailToMenu` 的注释）。
         await Settle12(faceX - 3f, faceY, "#12-12 A1 墙顶");
         State("A1 墙顶");
         await ShotGated("sec12-a-wall", "#12-12 A1 墙顶（1-2 主关 + 活着 + 站在墙顶）",
             () => SideGate(faceX - 3f, faceY));
 
         // ── A1：管口前 1 格（**直接摆位，不走过去**）──
-        // ⚠️ 这里原来是"按住右走、到位就松"。物理换成原版之后**它不安全了**：
         //    松键后的滑行距离 = v²/(2·减速度)，原版是 5.86²/(2×12.5) ≈ 1.37 格（旧参数只有 0.42 格），
         //    而轮询每 0.1 秒一跳（最坏再超 0.59 格）⇒ 实测总位移超过 2 格、右边缘顶到 165
         //    ⇒ **在拍"管口前"之前就换段了**（整场戏因此全拍在地表段、马里奥还被传到关卡外掉下去）。
@@ -1986,10 +1953,9 @@ public static class Probe
         // 现在是**两段过场**：① 自动走进侧向管口（StartPipeEnterSide）② 地表段从出管口升起。
         // 两段都要留帧，所以这里边等边抓：
         //
-        // ★ 采样步长 0.05 → 0.005 秒（E-24 消除后必须的改动）：过场第 1 段的走距现在是
+        // 采样步长 0.05 → 0.005 秒（E-24 消除后必须的改动）：过场第 1 段的走距现在是
         //   "到管口面为止" = 0.05 格 / 2.5 格每秒 = **0.02 秒**，用 0.05 秒的点采样**必然漏掉它**
         //   ⇒ 判据（过场期间不得身处实心格）就永远只有"没采到"，等于没验。
-        //   所以：只要 busy 就**每个采样都记**，最后把命中次数算成 PASS/FAIL（§1.12 第 1 条）。
         _stub.Hold(GameKey.RightArrow, true);
         var shotSide = false;
         var nearSamples = 0; var nearSolid = 0; var busySamples = 0;
@@ -2015,7 +1981,6 @@ public static class Probe
                     L($"PROBE section12 管口前逐采样 {nearSamples} x={p.FeetPosition.x:F3} " +
                       $"box=[{p.Bounds.xMin:F3},{p.Bounds.xMax:F3}] busy={p.Busy} solid={bad} fsm={FsmNow}");
             }
-            // ★ 加"还有没有活会话"的守卫（2026-09-19 17:40 实测：这一张也被 12742 字节的空帧覆盖过）——
             //   判据 = 活关卡 + 人活着 + 相机已经跟到结尾区（没有会话时相机停在 x=0.00）。
             if (!shotSide && p.Busy && StageContext.LevelPath == "Levels/World1-2" && p.Alive
                 && Camera.main != null && Camera.main.transform.position.x > 100f)
@@ -2114,9 +2079,9 @@ public static class Probe
         for (var i = 0; i < 120; i++)
         {
             await Wait(0.2f);
-            // ⚠️ Result 一进就有人会问 StageContext.Player == null（关卡会话已拆），
+            // Result 一进就有人会问 StageContext.Player == null（关卡会话已拆），
             // 所以"结算"判定必须在判空之前 —— 否则永远拍不到结算屏（实测踩过）。
-            // ⚠️ ShotSolid：进 Result 的头几帧面板还没画（实测直接 Shot 得到 10541 字节的**纯蓝天**空帧，
+            // ShotSolid：进 Result 的头几帧面板还没画（实测直接 Shot 得到 10541 字节的**纯蓝天**空帧，
             //    与"结算屏"完全无关）。重试到画面有内容为止。
             if (FsmNow == "Result") { State("A3 结算"); await ShotPanel("sec12-j-result"); break; }
             var p = StageContext.Player;
@@ -2320,8 +2285,6 @@ public static class Probe
     {
         await MenuReady();
         State("菜单第 1 次");
-        // ⚠️ 这一场 2026-09-19 12:28 出过事：场景在 `fsm=Loading` 时启动 ⇒ 拍出 12 张**入场卡**
-        //    当标题屏，并覆盖掉原来的好帧。出图前必须有 `MenuGate()`（fsm=Menu + 关卡会话已释放）。
         await ShotGated("t2_menu_run1", "#2 标题屏（连续两次进 Play 的第 1 次）", MenuGate);
         await ShotGated("t3_top", "#2 标题屏（同一屏的第 2 张）", MenuGate);
         // 同一次会话里再进一次菜单：域重载静态残留会在这里露出来（两次字节应一致）
@@ -2334,9 +2297,7 @@ public static class Probe
         await ShotGated("t2_menu_run2", "#2 标题屏（同一会话里第 2 次回菜单）", MenuGate);
     }
 
-    // ───────────────────── 场景：引擎署名（§1.6）─────────────────────
     //
-    // 为什么要有这一场：闸门 `engine-credit` 以前只 grep **源码字符串**，而实际出的两个缺陷
     // 恰恰是"源码对、画面错" —— ① 标题屏根本没有这一行；② 启动画面那行的源码文本是对的，
     // 但字体只有大写字形 ⇒ 画面上是 `BY CLOVER-ENGINE`。所以判据换成**运行时 UI 节点树上读**：
     // 面板 / 节点 / 实际 text / 实际字体 / 是否激活 / 锚点，落成
@@ -2403,7 +2364,6 @@ public static class Probe
     /// 抓拍**重试包装**：`CaptureScreenshotAsTexture` 偶尔会抓到"这一行还没画上去"的那一帧
     /// （实测：启动画面第一次抓拍 ink=0，而节点树里那一行是 active/visible 的）。
     /// 判据是"像素里必须有墨"，所以取不到墨就重抓到上限，并把**墨最多的那一张**作为结果 ——
-    /// 而不是把空帧当成"没有署名"（那会把工具缺陷误判成游戏缺陷，也会把游戏缺陷掩盖掉）。
     /// </summary>
     private static async Task<string> ShotBandFacts(string scope, UnityEngine.UI.Text t)
     {
@@ -2437,7 +2397,6 @@ public static class Probe
 
     /// <summary>
     /// 字体**字形**判据（判据要写进脚本，不许写"我看是小写"）：
-    /// 逐字形比 a-z 与 A-Z 的轮廓盒 —— 本工程原来那份 NES 像素字体里两者**逐个相等**
     /// （实测 `b`/`B` 都是 (0,0,896,896)）⇒ 它就是"把小写画成大写"的根源。
     /// 现在这份署名专用字体必须**不相等**，且 `y` 必须**下探到基线以下**（真下伸部）。
     /// </summary>
@@ -2502,7 +2461,7 @@ public static class Probe
     ///   · 只有大写字形：每个字的轮廓盒一样高（本工程旧字体实测 896/1024 em，逐个相同）⇒
     ///     顶行与中段行墨量几乎相同（≈0.9）。
     /// 裁下来的那块**存成图**（`credit-crop-<scope>.png`）：既是证据，也让离线脚本能独立复核同一批像素。
-    /// ⚠️ 不能用"画面底部 1/4"当范围 —— 标题屏底部还有 `TOP- 005000`，会把两行混成一条带（实测踩过）。
+    /// 不能用"画面底部 1/4"当范围 —— 标题屏底部还有 `TOP- 005000`，会把两行混成一条带（实测踩过）。
     /// </summary>
     private static string CreditShot(string scope, UnityEngine.UI.Text t)
     {
@@ -2511,9 +2470,9 @@ public static class Probe
             var tex = ScreenCapture.CaptureScreenshotAsTexture();
             if (tex == null) return "unavailable(capture null)";
             var W = tex.width; var H = tex.height;
-            // ★ 范围 = **屏幕最底部那一条**（不是标签自己的矩形）：
+            // 范围 = **屏幕最底部那一条**（不是标签自己的矩形）：
             //   判据本身就是"署名必须贴在底边"，所以范围就该是底边这一条。
-            //   ⛔ 别再用"换算出标签矩形"那条路 —— 实测 `WorldToScreenPoint` 给出过 yMin=375 的错矩形，
+            //   别再用"换算出标签矩形"那条路 —— 实测 `WorldToScreenPoint` 给出过 yMin=375 的错矩形，
             //   把屏幕顶部的 HUD 当成了署名带（ink=26286、hMax=95）⇒ 闸门在**画面对的情况下**报了 4 条 FAIL。
             //   教训：判据的范围要**与判据本身同义**，别经过一层容易错的换算。
             const int Strip = 64;
@@ -2555,9 +2514,9 @@ public static class Probe
                 for (var c = 0; c < cw; c++)
                     if (IsInk(px[r * cw + c], bg)) rowInk[r]++;
 
-            // ★ 只取**最下面那一条**连续墨带：署名是最底那行；
+            // 只取**最下面那一条**连续墨带：署名是最底那行；
             //   把整条 64px 混在一起会把同一屏里的 `TOP- 005000` 也算进来（那条行高不同 ⇒ 小写判据失效）。
-            // ⚠️ 行号方向：GetPixels 的 row 0 = 这一块的**下**边 ⇒ 行号越大越靠上。
+            // 行号方向：GetPixels 的 row 0 = 这一块的**下**边 ⇒ 行号越大越靠上。
             var rBot = -1; var rTop = -1;
             for (var r = 0; r < ch; r++)
             {
@@ -2656,8 +2615,6 @@ public static class Probe
         await Wait(0.8f);
         await AppendCredit(sb, "menu", "MainMenuPanel", menuLabel, Game.UI.IsOpen<SuperMario.UI.MainMenuPanel>());
 
-        // 启动画面那行：同一份报告里一起测 —— 闸门要求**两处都过**（§1.6：首页是硬要求，
-        // 启动画面也要能指到实机证据）。
         Game.Fsm.Transition(FlowState.Boot);
         await Wait(1.4f);
         var bootLabel = CreditLabelOf<SuperMario.UI.BootPanel>("Signature");
@@ -2704,7 +2661,7 @@ public static class Probe
         while (FsmNow != "Loading" && Time.realtimeSinceStartup - t1 < 25f) await Wait(0.1f);
         await Wait(0.7f);
         L($"PROBE intro 重来入场卡 fsm={FsmNow} 命={StageContext.Score?.Lives}");
-        // ⚠️ 必须用"大面积深色"判据（ShotPanel）：入场卡是黑底，用 ShotSolid 的稀疏网格判空帧
+        // 必须用"大面积深色"判据（ShotPanel）：入场卡是黑底，用 ShotSolid 的稀疏网格判空帧
         //    会把它判成空帧并**继续覆盖同名文件**，最后留下的是关卡画面（实测踩过）。
         await ShotPanel("intro_lives_check");
         await WaitStage(25f);
@@ -2780,7 +2737,7 @@ public static class Probe
         await Enter12();
         if (!IsStage) { L("PROBE 没进到 1-2，放弃"); return; }
 
-        // ⚠️ 必须站在**平台 3 格宽之外**（台面 x 跨度 = 列心 ±1.5）：站在正下方会被台面一路托上去
+        // 必须站在**平台 3 格宽之外**（台面 x 跨度 = 列心 ±1.5）：站在正下方会被台面一路托上去
         //    （第一版就是这样：25 秒里人被托到 y=12.7 的上层走廊，等不到"台面在头顶"那一刻）。
         //    站外侧 + 向右起跳 = 玩家真正做的动作。
         var standX = SafeGroundX(150.0f, 0f);
@@ -2823,7 +2780,6 @@ public static class Probe
     }
 
     /// <summary>
-    /// 顶砖两条规则的取证（用户 2026-09-20）：
     /// A. 砖顶的**敌人** ⇒ 顶一下翻飞（在 1-1 用从地面跳得到的 ? 块测，`Block.HitFromBelow` 对
     ///    所有块类型都调 `KillEnemiesOnTop`，出处 clone `_common/CollectibleBlock.cs:38-46`）；
     /// B. 砖顶的**金币** ⇒ 弹出金币动画 + 飘分 + 计币（全工程只有 **1-2 金币房**同时有砖和金币：
@@ -2839,8 +2795,7 @@ public static class Probe
 
     private static Vector2Int BlockTile(MonoBehaviour mb)
     {
-        // ★ 从**对象名**解析，别去反射 Tile —— 它是属性不是字段，反射拿到 null 会静默返回 (0,0)，
-        //   于是"把马里奥送到块下面"变成送到 x=0.5 顶空气，A/B 全成假阴性（实测 2026-09-20）。
+        // 从**对象名**解析，别去反射 Tile —— 它是属性不是字段，反射拿到 null 会静默返回 (0,0)，
         //   名字形如 `Block_<Kind>_<x>_<y>`（BlockModule 建块时就叫这个）。
         var parts = mb.gameObject.name.Split('_');
         if (parts.Length >= 4
@@ -2924,7 +2879,7 @@ public static class Probe
             else
             {
                 _stub.Hold(GameKey.Space, true);                 // 起跳
-                // ★ 起跳到顶到砖这段时间里**持续**把它按在砖顶：栗宝宝自己会走（0.5 秒能走约 0.5 格），
+                // 起跳到顶到砖这段时间里**持续**把它按在砖顶：栗宝宝自己会走（0.5 秒能走约 0.5 格），
                 //   只摆一次的话，顶到砖那一刻它可能已走出这一格 ⇒ `StandingOnTop` 判不到（假阴性）。
                 for (var i = 0; i < 14; i++)
                 {
@@ -2950,9 +2905,8 @@ public static class Probe
         _stub.Hold(GameKey.DownArrow, true);
         await Wait(0.35f);
         _stub.Hold(GameKey.DownArrow, false);
-        // ★ 判"进没进金币房"要用 SubArea，**不能**用 Underground —— 1-2 主关本身就是地下关
+        // 判"进没进金币房"要用 SubArea，**不能**用 Underground —— 1-2 主关本身就是地下关
         //   （under 恒为 true），拿它当条件会立刻通过，于是"在金币房里顶砖"实际是在 1-2 主关里顶砖
-        //   （2026-09-20 就是这么测出一堆假阴性的）。
         for (var i = 0; i < 80 && !StageContext.SubArea; i++) await Wait(0.2f);
         await Wait(1.0f);
         L($"PROBE B 进密室：sub={StageContext.SubArea} under={StageContext.Underground} 关卡={StageContext.LevelPath}");
@@ -2987,7 +2941,6 @@ public static class Probe
 
     /// <summary>
     /// 1-1 第一个蘑菇块（`E 7.5 0.5 MysteryBoxMushroom`）顶出蘑菇，之后**逐 0.15 秒记录蘑菇位置**，
-    /// 看它是停在地面顶面还是钻进地板里（用户 2026-09-20：「蘑菇从砖上掉到地板里面了，吃不到」）。
     /// </summary>
     public static void MushroomDrop() => Start("mushroomdrop", MushroomDropBody);
 
@@ -3036,10 +2989,8 @@ public static class Probe
     }
 
     /// <summary>
-    /// 通关收尾三件事的取证（用户 2026-09-20 报点）：
     /// ① 降旗到底时**底边**是否停在杆底（不该沉到基座砖下面）；
     /// ② 结算换分时 HUD 的「时间在减 / 分在涨」是否**同步**（直接读 UI 文字，不看推演）；
-    /// ③ 旗杆那一格有没有基座砖（1-1 有、1-2 地表段原先漏了）。
     /// </summary>
     public static void FlagCheck() => Start("flagcheck", FlagCheckBody);
 
@@ -3103,7 +3054,6 @@ public static class Probe
 
     /// <summary>
     /// 落在**并排两只**栗宝宝的接缝上：取证"踩一只不该被另一只撞死"
-    /// （用户 2026-09-19 的报点：「1-2 两个板栗并排走，我踩了第二个，还是会碰第一个死」）。
     /// 判据：落点后马里奥仍 alive 且形态没变，且两只都死（原版是"一脚踩死并排两只"）。
     /// </summary>
     public static void PairStomp() => Start("pairstomp", PairStompBody);
@@ -3127,7 +3077,7 @@ public static class Probe
         var a = list[0];
         var b = list[1];
 
-        // ⚠️ 摆敌人与落马里奥之间**不留站桩时间**：出生点旁边就有一对迎面走来的栗宝宝，
+        // 摆敌人与落马里奥之间**不留站桩时间**：出生点旁边就有一对迎面走来的栗宝宝，
         //    上一版在这里等 0.4 秒，马里奥在 `EnterGame` 后 0.5 秒就被撞死了（`马里奥死亡` 早于摆放）。
         const float groundY = -3f;
         const float bx = 12f;
@@ -3149,7 +3099,6 @@ public static class Probe
     }
 
     /// <summary>
-    /// 取证"顶砖时砖上面那些东西怎么办"（用户 2026-09-19 的回忆点，出处 clone `RegularBrickBlock.cs:22-40`）：
     ///   ① 砖上有敌人 ⇒ 顶死（翻飞 +100）
     ///   ② 砖上有金币 ⇒ 收走（+1 枚 +200，砖上方 2 格弹出新金币，旧金币消失）
     /// 做法：挑一块**普通砖**（金币那条只对普通砖生效）→ 摆上栗宝宝与金币 → 人到砖下跳一下。
@@ -3230,7 +3179,7 @@ public static class Probe
         var g = FindEnemy("Goomba", 60f);
         if (g != null) g.transform.position = new Vector3(standX + 0.3f, cell.y + 1f, 0f);
         var items = GetItemsModule();
-        // ⚠️ 实测：`SpawnCoin(center)` 的盒子是**底边 = 传入的 y**（日志盒子 (115.15,1.35)-(115.85,2.05)）
+        // 实测：`SpawnCoin(center)` 的盒子是**底边 = 传入的 y**（日志盒子 (115.15,1.35)-(115.85,2.05)）
         //    ⇒ 要"坐在砖顶面"就得传 `cell.y + 1`（我第一版传 +1.35，盒子底高了 0.35 ⇒ 判据差 0.35 > 0.25 容差，
         //    所以金币那条没触发 —— 是探针摆错，不是规则没接）。
         if (items != null) items.SpawnCoin(new Vector2(standX, cell.y + 1f));
@@ -3343,7 +3292,6 @@ public static class Probe
 
     // ═══════════ 场景：两个真 bug 一链两用（E-27 回调竞态 + 形态跨段保留）═══════════
     //
-    // 为什么合成一条链：进 Play 要记账（skill §2 第 2 条 / 任务书-两个真bug 的 Play 预算 = 2），
     // 两件事都只需要"一条真实的用户路径"，所以合在一次会话的一条链里跑。
     //
     // ① **E-27 那条路径**（标题屏 Logo 的异步加载回调晚到）：
@@ -3351,16 +3299,14 @@ public static class Probe
     //    `Game.Res.LoadAsset<Sprite>` 的回调是**异步**的 —— 晚到时回调里捕获的 `logo` 已经是
     //    "已销毁的 Image" ⇒ 修前抛 MissingReference，被引擎包成一条
     //    `[Error] [Resource] 加载回调异常（Sprites/Title/TitleLogo）`，对照实机原文见
-    //    `client/Logs/2026-09-19.log` 17:39:11.665（那次是 driver 把探针派在 Boot 阶段、
-    //    探针 9 毫秒后就发了 CharChosen ⇒ 回调必然还在途）。
-    //    ⚠️ 复现前提 = 那次加载**未命中缓存**：命中缓存时引擎是**同步**回调
+    //    复现前提 = 那次加载**未命中缓存**：命中缓存时引擎是**同步**回调
     //    （`ResourceManager.cs:175-184`），根本不会晚到。所以本场景先把缓存里那一条挤掉
     //    （`Release` 把引用计数降到 0，`UnloadAll` 只淘汰计数 ≤ 0 的条目），再走**真实入口**
     //    `BackToMain` 重新加载菜单场景 —— 面板重开、重新发一次异步加载。
     //    日志打印 `TryGet(TitleLogo)=null ⇒ 加载在途` 作为"前提真的成立"的凭据（不许假设）。
     // ② **形态跨段保留**：1-1 吃蘑菇变大 → 走到旗杆通关 → 进 1-2 读 `power=`（数值类判据）。
     //    修前 `EnterLoading` 会把 `NextLevel` 刚设好的形态擦掉 ⇒ 进 1-2 读到 `Small`。
-    //    ⚠️ `UnloadAll` 会把启动期 Preload 的**关卡文本**一起淘汰 ⇒ 中间走一次 `Boot`
+    //    `UnloadAll` 会把启动期 Preload 的**关卡文本**一起淘汰 ⇒ 中间走一次 `Boot`
     //    （`EnterBoot` 会重新 Preload）再进关，否则 `StageSession.LoadLevelText` 会报"关卡文本未就绪"。
     public static void CrossSeg() => Start("crossseg", CrossSegBody);
 
@@ -3389,9 +3335,8 @@ public static class Probe
         var cached = Game.Res.TryGet<Sprite>(logoPath);
         L($"PROBE E27 前置：TryGet({logoPath})={(cached == null ? "null" : "已缓存")}" +
           "（已缓存 ⇒ 引擎同步回调 ⇒ 复现不出，先把它从缓存里挤出去）");
-        // ⚠️ 淘汰必须**把引用计数降到 0**：`UnloadAll` 只淘汰计数 ≤ 0 的条目，而面板每开一次就
+        // 淘汰必须**把引用计数降到 0**：`UnloadAll` 只淘汰计数 ≤ 0 的条目，而面板每开一次就
         //    `RefCount++`（面板自己不 Release）⇒ 要 Release 到真被淘汰为止。
-        //    实测（2026-09-19 18:37 / 18:40）：只 Release 一次、甚至 8 次，都砍不到 0
         //    （批量场景里面板开过的次数就是引用计数）⇒ 这里循环到真被淘汰（并把计数打进日志，便于复算）。
         var refBefore = RefCountOf(logoPath);
         var evictedAt = 0;
@@ -3405,7 +3350,7 @@ public static class Probe
           $"{(Game.Res.TryGet<Sprite>(logoPath) == null ? "null ⇒ 未缓存" : "仍非 null（淘汰失败）")}" +
           $"（淘汰前 RefCount={refBefore}，第 {evictedAt} 轮淘汰）");
         if (evictedAt == 0) L("PROBE 警告：TitleLogo 淘汰失败 ⇒ 下面的竞态复现不出（命中缓存时引擎同步回调）");
-        // ⚠️ `UnloadAll` 顺带把启动期 Preload 的像素字体与 5 份关卡文本也淘汰了（它们计数为 0）。
+        // `UnloadAll` 顺带把启动期 Preload 的像素字体与 5 份关卡文本也淘汰了（它们计数为 0）。
         //    不补回来的话，下面那次 CharChosen 会打出两条**属于探针的** Error
         //    （`关卡文本未就绪` / `关卡数据为空`）⇒ 把要数的那个 E-27 窗口搅浑 —— 所以按
         //    `AppFlow.EnterBoot` 的同一份预热清单立刻补回来（清单与那里逐项一致）。
@@ -3469,21 +3414,17 @@ public static class Probe
 
     // ═══════════ 场景：死亡重来 ⇒ 形态归零（原版 LevelManager.cs:316）═══════════
     //
-    // 为什么必须有这一条（任务书-死亡链复验）：上一片把"清形态"从 `AppFlow.EnterLoading` 搬到了
     // 两个真正的"新一局"入口（`OnCharChosen` 新开一局 / `ReloadStageWithIntro` 死亡重来·换手）——
     // 搬家的目的是让**跨段带形态**生效（表体 #57 已实测通过），但同一处改动必须同时保证
-    // **死亡重来回到小马里奥**（原版行为）。后者是本片唯一要补的断言。
     //
     // 原版出处（clone `原版资源/参考工程/SMB-clone` 逐行核对）：
     //   · `LevelManager.cs:316 MarioRespawn` 里那句 `marioSize = 0` —— 只有**死亡**才归零；
     //   · 换关走 `LevelManager.cs:403-408 LoadNewLevel` → `GameStateManager.cs:53-57 ConfigNewLevel`
     //     （只重置时间 / hurryUp / 出生点，一个字节都不动 `marioSize`）⇒ 换段保留、死亡归零，两件事分开。
     //
-    // 判据（数值类：运行时读**活对象**的 `power` 与碰撞盒，⛔ 不截图，见 skill §4）＝ 三个读数：
     //   ① 死前 `power=Big` —— 前提成立，否则下面两条是**空断言**（这条也要打进日志）；
-    //   ② 掉坑死一次 → 重来后 `power=Small`（★ 本片要补的那一处断言）；
     //   ③ 再变大 → 走真实入口新开一局（`BackToMain` → `CharChosen`）→ `power=Small`。
-    //     ⚠️ ③ 必须**先变大**再新开一局：否则整条链上恒 Small，"新开一局也清形态"根本判不出来。
+    //     ③ 必须**先变大**再新开一局：否则整条链上恒 Small，"新开一局也清形态"根本判不出来。
     public static void DeathPower() => Start("deathpower", DeathPowerBody);
 
     private static async Task DeathPowerBody()
@@ -3501,7 +3442,7 @@ public static class Probe
           "（必须是 Big，否则②③是空断言）");
 
         // ── ② 掉坑死一次（真实死亡链路：掉出关卡 → 死亡结算 → 入场卡 → 重来）──
-        //     ⚠️ 与 `physics` 场景同一手法：先等它离开 Stage，再等它回到 Stage（见那里的注释）。
+        //     与 `physics` 场景同一手法：先等它离开 Stage，再等它回到 Stage（见那里的注释）。
         var livesBefore = StageContext.Score == null ? -1 : StageContext.Score.Lives;
         Teleport(StageContext.Player == null ? 100f : StageContext.Player.FeetPosition.x, -25f);
         L($"PROBE deathpower 已把马里奥丢出关卡（死亡前 命={livesBefore}）");
@@ -3515,7 +3456,7 @@ public static class Probe
           $"（原版 LevelManager.cs:316 那句 marioSize = 0 ⇒ 必须 Small）；命={StageContext.Score?.Lives} " +
           $"box={PosStr(StageContext.Player)} ⇒ {(afterDeath == PowerState.Small ? "PASS" : "FAIL")}");
 
-        // ── ③ 新开一局也是 Small（同一个 Play 会话里再读一行，⛔ 不为它再进一次 Play）──
+        // ── ③ 新开一局也是 Small（同一个 Play 会话里再读一行，不为它再进一次 Play）──
         if (StageContext.Player == null || !StageContext.Player.Alive)
         {
             L("PROBE deathpower 判据③跳过：重来后玩家不可用（② 已 FAIL，先修那一条）");
@@ -3548,7 +3489,7 @@ public static class Probe
     private static async Task GameOverBody()
     {
         await EnterGame();
-        // ⚠️ 必须**一次死亡走完再发下一次**：`Emit(TimeUp)` 是异步的（置 PendingDeath），
+        // 必须**一次死亡走完再发下一次**：`Emit(TimeUp)` 是异步的（置 PendingDeath），
         //    连发 5 次只有第一次会结算 —— 死亡期间 FSM 仍是 Stage，紧接着的第二次 emit 被吞掉。
         //    实测：连发 5 次只死 1 次（`还剩余 2 条命，重开本关`），16 秒后 fsm 还是 Stage，
         //    拍出来的 p1_mid 是**关卡画面**而不是 GameOver 屏。
@@ -3638,10 +3579,8 @@ public static class Probe
         State("1-2 入场");
         // 1-2 是地下关：BGM 必须是地下主题（clone `World 1-2.unity` 引用的就是 02-underworld.mp3）
         L($"PROBE bgm[1-2 地下段]：{BgmState()}");
-        // ⚠️ 这一张要**抢**：1-2 出生点 (0.5,0) 的栗宝宝约 2~3 秒就能撞死他（既存缺陷，已登记：本轮只登记不修）。
         //    做法 = ① 不再额外等空闲时间；② 每 50 毫秒查一次"fsm=Stage + 是 1-2 地下 + 相机已进关卡（x≥12）"，
         //    一满足就先把 timeScale 冻住（不给敌人时间）、出图、再恢复。旧口径"等到 fsm=Stage 再等 0.8 秒"
-        //    实测会正好落在死亡重开之后（2026-09-19 17:01：闸门读到 fsm=Loading）。
         var earlyDone = false;
         for (var attempt = 1; attempt <= 3 && !earlyDone; attempt++)
         {
@@ -3667,7 +3606,7 @@ public static class Probe
             }
         }
         if (!earlyDone) L("PROBE 警告：#12-2 三次都没抢到可拍窗口 —— s12_early 保持旧文件（未写盘）");
-        // ★ 收尾必须回主菜单：这一场结束时人正站在 1-2 出生点，敌人几秒后就会把他撞死，
+        // 收尾必须回主菜单：这一场结束时人正站在 1-2 出生点，敌人几秒后就会把他撞死，
         //   而那条 `马里奥死亡` 会落到**下一个场景**的窗口里（实测 17:39:54.626，把 mouth2 整场搞乱）。
         await TailToMenu("level12");
     }
@@ -3693,7 +3632,6 @@ public static class Probe
     }
 
     /// <summary>
-    /// #3（任务书-收尾三项）：从 1-2 出生点**不作任何按键**能活多久 —— 数值类证据（运行时日志行）。
     /// <para>
     /// 记**两个参照点**（两者的差 = 入场卡期间世界仍在跑的那一段，见验收表 #12-2 的注）：
     /// <list type="bullet">
@@ -3792,7 +3730,7 @@ public static class Probe
         State("密室落地后（吃币）");
         Shot("22-coinroom-floor");
         // 金币平台顶面 y=0，从地面（y=-3）要跳 3 格才上得去；上平台后向右扫币。
-        // ⚠️ 右移必须在 x > -5.5 处停住：再往右就踩进出口管（T x=-4..-1）会提前出管（实测踩过）
+        // 右移必须在 x > -5.5 处停住：再往右就踩进出口管（T x=-4..-1）会提前出管（实测踩过）
         for (var i = 0; i < 5; i++)
         {
             if (!StageContext.Underground) { L("PROBE 警告：已经不在密室里（提前出管），停止扫币"); break; }
@@ -3934,10 +3872,6 @@ public static class Probe
     /// <para>
     /// 坐标全部有出处（这里一个数都不定）：
     /// · 进管管口 = `client/Assets/Resources/Levels/World1-2.txt` 的 `T 100 0..2` / `T 101 0..2`
-    ///   （元素表 §4.1 表第 1 行：`Warp Green Pipe 2x3 Down.prefab` @ clone (100.5,0)，
-    ///   出处 `World 1-2.unity:11125`）⇒ 管跨 x∈[100,102]、管口顶面 = 瓦片 y=2 的上沿 = **3**
-    ///   ⇒ 站中间 x=101。
-    /// · 房间格坐标 = 元素表 §4.2（与 `World1-2-Underground.txt` 同一套）：
     ///   地面顶面 y=0、中墙（y=3 一整排，顶面 y=4）上摆 8 枚币、地面摆 9 枚币（共 17 枚）、
     ///   出口侧向管管口 2 格在 x=5,6。
     /// </para>
@@ -3948,7 +3882,7 @@ public static class Probe
         if (!IsStage) { L("PROBE 没进到 1-2，放弃"); return; }
         State("1-2 主关（进管前）");
 
-        // ⚠️ 先清场：1-2 的起点附近有两只栗宝宝（`E 13 0` / `E 14 1`），它们**一路向左走**，
+        // 先清场：1-2 的起点附近有两只栗宝宝（`E 13 0` / `E 14 1`），它们**一路向左走**，
         //    4~5 秒就走到出生点 (0.5,0) 把马里奥撞死 —— 实测本场景因此整场报废
         //    （`马里奥死亡` → 重开 → 再死 → GameOver，26~30 五张图全废）。
         //    用游戏自己的 `IEnemy.Flip()` 清掉，不改代码、也不影响要验证的进管链路。
@@ -3956,7 +3890,7 @@ public static class Probe
         L($"PROBE coinroom12 先清掉 {cleared} 只栗宝宝（免得它们走到出生点撞死马里奥）");
         await Wait(0.5f);
 
-        // ⚠️ 进管那根管子上就有一朵食人花（x=100.5）。它伸出来的时候把马里奥直接传到管顶
+        // 进管那根管子上就有一朵食人花（x=100.5）。它伸出来的时候把马里奥直接传到管顶
         // 会被它顶死（实测：传送后 3 毫秒 `马里奥死亡`，整个场景报废）。
         // 所以先等它缩回管里再站上去 —— 玩家在原版里也是等它缩回去才下去。
         var phIn = FindEnemy("Piranha", 100f);
@@ -3971,7 +3905,6 @@ public static class Probe
         }
         else L("PROBE coinroom12 警告：找不到进管口的花（继续，可能被打掉了）");
 
-        // 站在进管管口顶面（§4.1：管跨 [100,102]、顶面 3）。
         Teleport(101f, 3f);
         await Wait(0.8f);
         State("站在 1-2 进管管口");
@@ -3984,7 +3917,7 @@ public static class Probe
         {
             await Wait(0.2f);
             if (i % 5 == 0) L($"PROBE 进管 t={i * 0.2:F1} fsm={FsmNow} sub={StageContext.SubArea} under={StageContext.Underground} 马里奥={PosStr(StageContext.Player)}");
-            // ⚠️ 判据只能用 SubArea：1-2 主关**本来就是**地下关（under=True 恒成立），
+            // 判据只能用 SubArea：1-2 主关**本来就是**地下关（under=True 恒成立），
             //    用 Underground 判"进没进密室"会一进来就为真（1-1 那边可以用，因为它地上）。
             if (StageContext.SubArea) break;
         }
@@ -3995,22 +3928,18 @@ public static class Probe
         StageContext.Player.PowerUp(PowerState.Big);
         await Wait(1.5f);
 
-        // ── 地面那一排币（§4.2：y=0、x=-5..3，共 9 枚）──
         // 吃到 9 枚就停；兜底 stopX=4.2 —— 出口管口左表面在 x=5，右边缘一顶到就自动出管
-        //（1-1 踩过同类坑：扫币扫到管口，提前出管）。
         var x1 = await WalkRightUntilCoins(9, 4.2f, 60);
         await Wait(0.8f);
         L($"PROBE 扫地面币后 币={StageContext.Score?.Coins} 分={StageContext.Score?.Points} 时={StageContext.Score?.TimeLeft} 马里奥={PosStr(StageContext.Player)} 停在x={x1:F2}");
         State("密室地面金币区");
         Shot("28-coinroom12-floor");
 
-        // ── 中墙顶那一排币（§4.2：y=4、x=-4..3，共 8 枚）──
         // 墙顶在 y=4，从地面跳要 4 格（小马里奥满跳峰值 4.68 格、贴天花只剩 3 格余量，
         // 靠跳不可靠），所以探针直接把马里奥放到墙顶左端再向右走 ——
         // 吃币走的仍是游戏自己的碰撞/拾取逻辑，这里只是省掉"跳上去"那一步。
         Teleport(-4.6f, 4f);
         await Wait(0.6f);
-        // 吃到全房间 17 枚（§4.2）为止；兜底 stopX=4.2（墙顶到 x=4 就是多金币砖，本来就挡住）。
         var x2 = await WalkRightUntilCoins(17, 4.2f, 60);
         await Wait(0.8f);
         L($"PROBE 扫中墙顶币后 币={StageContext.Score?.Coins} 分={StageContext.Score?.Points} 时={StageContext.Score?.TimeLeft} 马里奥={PosStr(StageContext.Player)} 停在x={x2:F2}");
@@ -4052,17 +3981,14 @@ public static class Probe
 
     // ═══════════ 场景：两间密室的出口侧向管口（A2：与原版 misc-3.gif 并排）═══════════
     //
-    // 为什么删掉了原来的 Flag12 场景：它按"1-2 主关有旗杆"写（Teleport 到 `lv.FlagpoleTouchX`）。
     // 而 1-2 拆成两段后**主关没有旗杆**（`World1-2.txt` 的 `# no-flagpole`），`GameplayModule`
     // 对 `!HasFlagpole` 直接 return ⇒ 那个场景会一直走到 140 步上限（35 秒）也不会通关，是个"必然
     // 白等"的陷阱。1-2 的通关/结算已由 `Section12` / `Walk12End` 覆盖（走地表段的旗杆）。
     //
     // 坐标出处（这里一个数都不定）：
-    //   · 1-1 密室：元素表 §3.2（clone `Warp Green Pipe Side Long.prefab` world=(7.5,0.5)
     //     cells=x=5..8,y=0..10 ⇒ 本工程格 T x=-4..-1）⇒ 管口面 x=-4
     //     （`PipeWarpTable.BonusRoomExitFaceX`）；管口 2 格 = `World1-1-Underground.txt` 的
     //     `T -4 -3 _44` / `T -4 -2 _31`（中段 `T -3 -3 _45` / `T -3 -2 _32`）。
-    //   · 1-2 密室：元素表 §4.2 的出口侧向管管口 2 格在 x=5,6 ⇒ 管口面 x=5
     //     （`PipeWarpTable.Level12`）；管口 2 格 = `World1-2-Underground.txt` 的
     //     `T 5 0 _44` / `T 5 1 _31`（中段 `T 6 0 _45` / `T 6 1 _32`）。
     //   · 判据：管口是"朝左的开口"（贴图 = 原版 `misc-3.gif` 的 `pipe_green_top_side`/`pipe_green_mid`），
@@ -4085,7 +4011,7 @@ public static class Probe
         L($"PROBE mouth2 1-1 密室就位 under={StageContext.Underground} 关卡={StageContext.LevelPath} " +
           $"玩家={PosStr(StageContext.Player)}");
         // 站在出口管口正前方：管口面 x=-4、地面顶面 y=-3。
-        // ⚠️ 站位只能取 x∈[-5.625,-4.375]：左边 x<-5.625 时碰撞盒会压到平台砖 (-7,-3)（x∈[-7,-6)）
+        // 站位只能取 x∈[-5.625,-4.375]：左边 x<-5.625 时碰撞盒会压到平台砖 (-7,-3)（x∈[-7,-6)）
         //    被碰撞解算**弹到 -13.38**（实测：第一版取 -6.4，截出来的图是房间左半边，完全没照到管口）；
         //    右边 x>-4.375 时右边缘一顶到 x=-4 就自动出管。**不作任何按键**（走路会滑出去）。
         Teleport(-5.0f, -3f);
@@ -4120,14 +4046,11 @@ public static class Probe
         L($"PROBE mouth2 到 1-2 主关 fsm={FsmNow} 关卡={StageContext.LevelPath}");
 
         // ── 1-2 金币房 ──
-        // ⚠️ 2026-09-19：**先离开出生点，再等食人花**。
-        //    上一版是"先等花缩回（2.1 秒）再传送"，而实测（`client/Logs/2026-09-19.log` 14:12:41）
         //    马里奥在 1-2 出生点 (0.5,0) 上、**不给任何按键**也会在进关 ~2.9 秒后死亡
         //    （日志里没有"掉出关卡"/"强制死亡"，即 `TickPlayerVsEnemies -> TakeDamage`
         //     —— 那条路径**不打印是哪个敌人**，见 GameplayModule.cs:302）。结果整套戏在死亡/重开
         //     /GameOver 里跑完，最后那张 `sec12-l-mouth12.png` 拍到了**主菜单**（坏图）。
         //    ⇒ 进 1-2 后立刻传送到管顶（离开那个危险点），离开前先 dump 一次附近敌人留证据。
-        // ★ 两个"开局就死"的坑（都在 2026-09-19 这一轮实测到，日志里有）：
         //   ① 出生点 (0.5,0)：原版那只从 x≈13 走过来的栗宝宝 **~3 秒**就撞到人（不带任何按键也死）。
         //   ② 进管口顶 (101,3)：`Teal Piranha` 在 x=100.5、伸出时占 y=2.19..3.19 ⇒ 站在管顶就重叠
         //      （实测：`tp → (101.00,3.00)` 之后 **4 毫秒**就 `马里奥死亡`）。
@@ -4161,7 +4084,7 @@ public static class Probe
         Teleport(3.0f, 0f);
         await Wait(0.8f);
         State("A2 1-2 密室出口管口");
-        // ★ 出图闸门：**只有**"真在 1-2 密室且活着"才写这张图。上一版的坏图（标题屏）
+        // 出图闸门：**只有**"真在 1-2 密室且活着"才写这张图。上一版的坏图（标题屏）
         //   就是因为没这道闸门 —— 世界已经回到 Menu 了还照拍。
         var q = StageContext.Player;
         if (FsmNow == "Stage" && StageContext.SubArea && q != null && q.Alive)
@@ -4188,7 +4111,6 @@ public static class Probe
         return sb.Length == 0 ? "（附近无敌人）" : sb.ToString().TrimEnd();
     }
 
-    // ═══════════ 2026-09-19 追加：物理数值（对照表 四、）═══════════
     //
     // 判据（数值类）：**运行时从对象上读到的值** vs **clone 的真值**
     //   · 水平速度 / 竖直速度 ← `IPlayer.Velocity`（活对象）
@@ -4196,7 +4118,7 @@ public static class Probe
     //   · 敌人速度 ← 敌人 `transform.position` 在**游戏时间**里的位移
     //   · 关卡时间 ← `StageContext.Score.TimeLeft`
     //   · 台面尺寸 ← 台面 `SpriteRenderer.sprite.bounds.size`
-    // ⛔ 这里**不引用任何 `GameConst` 常量**：读数必须来自活对象，代码常量改了也不影响读数。
+    // 这里**不引用任何 `GameConst` 常量**：读数必须来自活对象，代码常量改了也不影响读数。
 
     public static void Physics() => Start("physics", PhysicsBody);
 
@@ -4469,7 +4391,7 @@ public static class Probe
           "（clone `GameStateManager.cs:46` ConfigNewGame: timeLeft = 400.5f，HUD 取整显示 400）");
         L($"PROBE phys 场景起点 x={StageContext.Player?.FeetPosition.x:F2} t={t0:F2}");
 
-        // ⚠️ 先把马里奥挪到**安全的落脚点**：4 格高管道的管顶（x=137, y=1）。
+        // 先把马里奥挪到**安全的落脚点**：4 格高管道的管顶（x=137, y=1）。
         //    为什么必须挪 —— 1-1 的栗宝宝**会一路向左走到关卡起点**（26.5 那只在 14 秒后正好
         //    走到出生点 -10.5），实测把马里奥留在出生点量 5 秒，第 5.1 秒就被撞死、
         //    整关重开、抓到的敌人引用全部失效（读数变成 0.00）。管顶栗宝宝爬不上来。
@@ -4477,7 +4399,7 @@ public static class Probe
         await Wait(0.6f);
 
         // ── 先量敌人（趁它们还活着）：栗宝宝 / 乌龟 / 龟壳 ──
-        //   ⚠️ 三条纪律（都是第一次跑踩出来的）：
+        //   三条纪律（都是第一次跑踩出来的）：
         //   ① **不要把马里奥传送到敌人旁边**去量 —— 栗宝宝会把他撞死（实测：传过去 4 毫秒后
         //      `马里奥死亡`，随后整关重开、刚抓到的敌人引用全部失效 ⇒ 读数变成 0.00）。
         //      敌人从关卡一起铺开、一直自己走（`GameplayModule.Tick` 只 Reap，不做距离剔除），
@@ -4526,7 +4448,6 @@ public static class Probe
         await Wait(0.6f);
 
         // ── 龟壳滑行速度：踩成壳 → 踢出去 → 量位移 ──
-        //   ⚠️ 两次实测踩出来的坑：
         //   ① 踩下去之后**必须马上把马里奥挪走** —— 他会弹起来再落到壳上，那一下就变成
         //      "踩静止的壳 = 踢出去"（第二个 `踩中敌人 +200`），壳被朝【左】踢，而 1-1 那只
         //      乌龟离 72-74 的坑只有 4 格 ⇒ 壳一滚进坑就被销毁（实测 `pos=已销毁`）。
@@ -4613,7 +4534,7 @@ public static class Probe
             if (s.vy > v0) v0 = s.vy;
             if (s.y > peak) peak = s.y;
             if (s.vy > 5f) { if (tUpA == 0f) { tUpA = s.t; vUpA = s.vy; } tUpB = s.t; vUpB = s.vy; }
-            // ⚠️ 下落这一段只取 **|vy| < 20** 的采样：`MaxFallSpeed = 24` 会把末速夹住，
+            // 下落这一段只取 **|vy| < 20** 的采样：`MaxFallSpeed = 24` 会把末速夹住，
             //    夹住之后的斜率是假的（实测按 |vy| < 20 取之前，量出 72.22 而不是 85.27）。
             if (s.vy < -5f && s.vy > -20f) { if (tDnA == 0f) { tDnA = s.t; vDnA = s.vy; } tDnB = s.t; vDnB = s.vy; }
         }
@@ -4706,7 +4627,7 @@ public static class Probe
         await Enter12();
         if (!IsStage) { L("PROBE 没进到 1-2，放弃"); return; }
 
-        // ⚠️ 1-2 是地下关：地面占 y=−2..−1 ⇒ **地面顶面 = 0**（不是 1-1 的 −3）。
+        // 1-2 是地下关：地面占 y=−2..−1 ⇒ **地面顶面 = 0**（不是 1-1 的 −3）。
         const float Ground = 0f;
 
         // ── ① spawner 就位（x 必须等于原版 spawner 的世界 x）──
@@ -4797,7 +4718,6 @@ public static class Probe
         Shot("probe-plat-gone");
     }
 
-    // ───────────────────── 场景：管道五处表现（2026-09-19 用户报）─────────────────────
     //
     // 用户原话（5 条）：
     //   ① 「金币我记得 飞一小会就会变成分数」
@@ -4806,7 +4726,7 @@ public static class Probe
     //   ④ 「管道没把食人花完全挡住」
     //   ⑤ 「出管道一瞬间会被管道弹开」
     //
-    // 判据（数值 + 画面**双证据**；⛔ 不靠"我觉得像"）：
+    // 判据（数值 + 画面**双证据**；不靠"我觉得像"）：
     //   ② 数值 = 管中移动期间玩家精灵 `order` 必须是 −1（地形 0 之下、与食人花同层）；
     //      画面 = `pipefix-a-sink.png`（下潜途中：只露管口以上那半截，下面被管子挡住）。
     //   ③ 数值 = `侧向进管 … 走距` ≈ 管口宽（2 格）；之后**没有** `管中过场超时` 兜底；
@@ -4828,7 +4748,7 @@ public static class Probe
         // ═══ ① 金币 → 分数：顶多金币砖 T(80,0)（走游戏自己的 IBlock.HitFromBelow，与真跳顶同一条链）═══
         KillGoombasNear(80f, 14f);
         await TeleportGround(80.5f, "coinpop");
-        // ⚠️ 相机是"平滑跟随 + **永不后退**"（`CameraModule` 的 `_maxReachedX`）：刚传送完相机还在路上
+        // 相机是"平滑跟随 + **永不后退**"（`CameraModule` 的 `_maxReachedX`）：刚传送完相机还在路上
         //    （上一轮实测：传送后 152 ms 抓帧，人在 80.5 而相机只到 x=46.68 ⇒ 帧里根本没有人和飘字）。
         //    必须先等它跟上来再顶砖，否则这一条永远拍成空机位。
         await Wait(2.0f);
@@ -4891,7 +4811,7 @@ public static class Probe
 
         // ═══ ③ 出管（金币房横向管）：走进管口 + 换场必须快（修前是 3 秒兜底超时）═══
         //
-        // ⚠️ 站位只能像 `Mouth2` 那样**先摆到管口正前方**（`Teleport(-5.0f,-3f)`）再按右键：
+        // 站位只能像 `Mouth2` 那样**先摆到管口正前方**（`Teleport(-5.0f,-3f)`）再按右键：
         //    金币房里有一块 3 格高的平台砖 T x=−13..−7 / y=−3..−1，从出生点 (-15) 裸按右键会被它
         //    的左面挡在 x=−13.38（上一轮实测就是这个：`马里奥=(-13.38,-3.00) 右边缘=-13.00`，永远到不了管口）。
         //    摆位后**不作任何跳/走**，只用短促的右键把右边缘送到管口面 x=−4。
@@ -5072,7 +4992,7 @@ public static class Probe
     /// <summary>
     /// 等某一朵花完全伸出（包围盒高 &gt; 1.4）再打一次中线读数。
     /// <para>
-    /// ⚠️ 为什么必须等"伸出态"：`SolidSpanAt(p.x, p.y + 0.7f)` 的参照行是"花底边往上 0.7 格"——
+    /// 为什么必须等"伸出态"：`SolidSpanAt(p.x, p.y + 0.7f)` 的参照行是"花底边往上 0.7 格"——
     /// 缩回时花底在管子下部甚至落进地板行，量到的是**地板**（实测 17 格宽），读数会把判据带偏。
     /// </para>
     /// </summary>
@@ -5124,12 +5044,11 @@ public static class Probe
         return false;
     }
 
-    // ═══════════════ 场景：README 实机画面重拍（用户 2026-09-20 点名）═══════════════
     //
     // 用户原话：「用实机画面，覆盖 readme.md 里面的画面，你去重新截（版权那个要带上）」。
     // 本场景拍的全是**本工程自己的实机帧**；拍完由 `tools/probes/readme-shots.ps1` 复制进
     // `<项目根>/策划/实机图/`，`README.md` 引用的是那份**进仓库**的副本
-    // —— ⛔ README 不许直接引用 `.ai-tmp/screenshots/`（那是按约定用后即删的一次性产物）。
+    // —— README 不许直接引用 `.ai-tmp/screenshots/`（那是按约定用后即删的一次性产物）。
     //
     // 四张（＝ README「实机画面」那一节）：
     //   ① `readme-title`             标题屏 —— **必须带版权行 `©1985 NINTENDO`** 与引擎署名 `by clover-engine`
@@ -5155,11 +5074,8 @@ public static class Probe
         // ── ② World 1-1 首屏 ──
         await EnterGame();
         if (!IsStage) { L("PROBE 没进到 1-1，放弃拍 README 画面"); return; }
-        // ⚠️ 不能一进关就摆到 (6.5,-3)：1-1 最左那只栗宝宝在 `E 9.5 -2.5`，**向左**走（2.5 格/秒），
-        //    进关约 1.2 秒后它正好经过 x=6.5 —— 实测 2026-09-20 16:39:09（第一次跑这个场景）：
+        // 不能一进关就摆到 (6.5,-3)：1-1 最左那只栗宝宝在 `E 9.5 -2.5`，**向左**走（2.5 格/秒），
         //    `马里奥传送 → (6.5,-3.0)` 之后 0.34 秒就 `马里奥死亡`（小马里奥被侧面撞 = 静默 Kill），
-        //    于是出图闸门以 `存活=False` 拒图。修法 = 等它走过去 + 顺手清掉附近的（`reshoot` 场景
-        //    之所以没踩到这坑，是因为它在摆位前已经先跑了几秒钟的转储）。
         await Wait(2.8f);
         await ClearGoombasNear(6.5f, 6f);
         Teleport(6.5f, -3f);
@@ -5178,7 +5094,7 @@ public static class Probe
         await ShotGated("readme-world1-2", "README ③ 1-2 地下段", () => SideGate(10f, 0f));
 
         // ── ④ World 1-2 地表段（旗杆 + 城堡）──
-        // 走侧向管口换段（管口面由关卡数据给，⛔ 不写死），换完再摆到旗杆左边。
+        // 走侧向管口换段（管口面由关卡数据给，不写死），换完再摆到旗杆左边。
         var lv12 = StageContext.Level;
         if (lv12 == null) { L("PROBE 1-2 关卡没了 ⇒ 拍不到地表段"); return; }
         await Settle12(lv12.SideExitFaceX - 1f, lv12.SideExitY, "README ④ 进侧向管前");
@@ -5196,7 +5112,6 @@ public static class Probe
         await TailToMenu("readme");
     }
 
-    // ═══════════════ 场景：两个用户点名缺陷的实机判据（2026-09-20）═══════════════
     //
     // ① **受伤没有音效**（用户原话）。判据 = **真实在播的 AudioSource**（`BgmState()` 读的是引擎音源池，
     //    不是业务层"我调了播放"）里出现 `pipepowerdown playing=True`，且它落在"受伤降级"那一刻的窗口内。
@@ -5205,10 +5120,10 @@ public static class Probe
     //        的**上升沿**（没在播 → 在播）。修前那版在"走进城堡"与"倒计时结束"各响一次 ⇒ 这里会数到 2。
     //    (b) **并发数 ≤ 1**：同一时刻 `LevelComplete playing=True` 的音源**最多 1 个**（重播必然多一个音源同时在放）。
     //    (c) **日志增量 = 1**：`播放通关音乐 LevelComplete（只此一次）` 这个串**只**出现在"倒计时开始"那一句。
-    //    ⚠️ 三条都要，缺一不可：只看日志 ⇒ 若有人改了日志却照样播（或绕开日志）就测不出来；
+    //    三条都要，缺一不可：只看日志 ⇒ 若有人改了日志却照样播（或绕开日志）就测不出来；
     //       只看音源 ⇒ 「响两次」与「响一次但很长」分不清（`LevelComplete.wav` 实测 6.4 秒，
     //       与倒计时 ~7.8 秒同量级，单看某一时刻的 isPlaying 分不出重播）。
-    //    ⚠️ 判据① 跑完**先把这一局重开**（`TailToMenu` + `EnterGame`）再走旗杆链路 —— 理由是实测出来的，
+    //    判据① 跑完**先把这一局重开**（`TailToMenu` + `EnterGame`）再走旗杆链路 —— 理由是实测出来的，
     //       写在 `FixBody` 里（"打完架直接接着走"不稳：16:45 那次人一步没走）。
     public static void Fix() => Start("fix", FixBody);
 
@@ -5221,7 +5136,6 @@ public static class Probe
     {
         try
         {
-            // cwd = client/（引擎把探针跑在工程目录里）；日志按天切名，跨零点后旧文件不再追加（实测 2026-09-19）。
             var p = "Logs/" + DateTime.Now.ToString("yyyy-MM-dd") + ".log";
             if (!File.Exists(p)) { L($"PROBE 读日志失败（{p} 不存在）"); return -1; }
             string text;
@@ -5272,7 +5186,7 @@ public static class Probe
               $"盒=[{gb.xMin:F2},{gb.xMax:F2}]x[{gb.yMin:F2},{gb.yMax:F2}]");
             // 摆到它**同一个脚底高度、同一列**上：判定里"从上方踩下来"的两条前提都不成立
             //   （脚底不高于敌人中心、上一帧脚底也不在它顶面之上）⇒ 走 `TakeDamage()` 那条侧面接触路径，
-            //   与玩家"从侧面撞上去"是同一条链（⛔ 不是直接调 TakeDamage 造假）。
+            //   与玩家"从侧面撞上去"是同一条链（不是直接调 TakeDamage 造假）。
             Teleport(gb.center.x, gb.yMin);
             var seen = false; var hitLine = ""; var samples = 0; var damaged = false;
             for (var i = 0; i < 150; i++)
@@ -5293,14 +5207,12 @@ public static class Probe
 
         // ── ② 通关音乐：**先把这一局重开**、再走一条真实的旗杆链路（与 `flag` 场景同形）──
         //
-        // ⚠️ 判据用的串必须**只在流程那一行里出现**：第一次跑（2026-09-20 16:39）用的是
         //    `播放通关音乐`，而探针自己下面那两行日志把判据串**原样抄了一遍**
         //    （`...日志「播放通关音乐」链路前 ...`）⇒ 计数被自己污染，增量读到 2、判 FAIL（假红）。
         //    现在这个串 = 流程那一行的完整片段，探针自己的日志里不出现它。
         const string musicMark = "播放通关音乐 LevelComplete（只此一次）";
 
-        // ⚠️ 为什么判据① 一跑完**先重开一局**、而不是接着走旗杆：
-        //    实测（2026-09-20 16:45）判据① 一结束就 `Teleport(181.5,-3)` + 按住右 —— 人**一步没走**，
+        // 为什么判据① 一跑完**先重开一局**、而不是接着走旗杆：
         //    `到达旗杆` 到时间耗尽都没出现（白等 160 秒）⇒ 启动沿 0 次 ⇒ 假红；而 16:39 那次同一段
         //    代码却走通了 ⇒ "打完架直接接着走旗杆"不稳。重开一局后这一段就与**已验收、稳定复现**的
         //    `flag` 场景完全同形（`FlagBody` 的五步：Teleport → Wait(0.8) → ClearGoombasNear → 按右 1.2s → 松开）。
@@ -5330,8 +5242,7 @@ public static class Probe
         var lastSt = "（还没采到音源）";
         var endAudio = "（没等到「通关结算完成」就换段了）";
         var endChecked = false;
-        // ★ 采样降频（性能）：`BgmState()` 要 `FindObjectsByType` 扫全部音源，**每轮都调**的话
-        //   2000 轮实测跑了 **167 秒**（2026-09-20 16:45）。改成**每 5 轮采一次** = 100 毫秒粒度 ——
+        // 采样降频（性能）：`BgmState()` 要 `FindObjectsByType` 扫全部音源，**每轮都调**的话
         //   `LevelComplete.wav` 有 6 秒多，重播必然在下一个采样点被看见（不会漏沿）；
         //   日志计数**每 50 轮**（≈1 秒）查一次（读整篇日志文本比扫音源便宜，但也没必要每轮做）。
         for (var i = 0; i < 1600; i++)      // 20 毫秒/轮 × 1600 = 32 秒上限
@@ -5350,7 +5261,7 @@ public static class Probe
                 else lcOn = false;
                 if (c > lcMax) lcMax = c;
             }
-            // ★ 每秒打一条玩家 `x` —— 上一次失败就是因为没有位移读数，只能靠猜"人到底走没走"。
+            // 每秒打一条玩家 `x` —— 上一次失败就是因为没有位移读数，只能靠猜"人到底走没走"。
             if (i % 50 == 0)
                 L($"PROBE fix 判据② t={i * 0.02f:F1}s 马里奥x=" +
                   $"{(StageContext.Player == null ? -999f : StageContext.Player.FeetPosition.x):F2} " +

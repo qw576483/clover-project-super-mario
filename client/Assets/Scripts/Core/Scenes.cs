@@ -3,7 +3,6 @@ namespace SuperMario.Core
     /// <summary>
     /// Unity 关卡名常量。
     /// <para>
-    /// 必须与 Build Settings 里的场景名逐字一致 —— 对不上时 <c>Game.Scene.Load</c> 会静默失败
     /// （只留一条错误日志，画面停在原地），所以不允许在别处写裸字符串。
     /// </para>
     /// </summary>

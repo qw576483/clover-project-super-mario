@@ -17,13 +17,11 @@ namespace SuperMario.Core
 
         /// <summary>
         /// 1-1 的金币房（管中密室）。数据从 SMB-clone 的 `World 1-1 - Underground.unity` 解出
-        /// （元素表 §3.2），入口 = 主关卡第 4 根水管（T x=43..44,y=-3..0）。
         /// </summary>
         public const string Level11Underground = "Levels/World1-1-Underground";
 
         /// <summary>
         /// 1-2 的秘密金币房（管中密室）。数据从 SMB-clone 的 `World 1-2 - Underground.unity` 解出
-        /// （元素表 §4.2），入口 = 主关卡那根 `Warp Green Pipe 2x3 Down`
         /// （clone (100.5,0)，`World 1-2.unity:11125` ⇒ 本工程格 x=100..101, y=0..2）。
         /// </summary>
         public const string Level12Underground = "Levels/World1-2-Underground";
@@ -33,7 +31,7 @@ namespace SuperMario.Core
         /// <para>原版 1-2 是两段：地下段走到底 → 进右侧墙上的侧向管 → 地表段（出管 → 旗杆 → 城堡）。
         /// 旗杆与城堡在**这一段**里（地下段没有），坐标由关卡文件的 `# flagpole` / `# castle` 声明，
         /// 出处见文件头。</para>
-        /// <para>⚠️ 这一段在地表，瓦片用 `WorldTileSprites_52`/`_65`（棕砖/大理石）——
+        /// <para>这一段在地表，瓦片用 `WorldTileSprites_52`/`_65`（棕砖/大理石）——
         /// 与 1-1 同一套；写成地下段的 `_1`（青砖）会导致"地表段地面是青色的"。</para>
         /// </summary>
         public const string Level12Surface = "Levels/World1-2-Surface";
@@ -48,15 +46,12 @@ namespace SuperMario.Core
         /// <summary>
         /// 引擎署名那行（`by clover-engine`）专用的字体。
         /// <para>
-        /// ⚠️ <b>不能用 <see cref="PixelFont"/></b>：那份 NES 像素字体里 a-z 的**字形与 A-Z 完全相同**
+        /// <b>不能用 <see cref="PixelFont"/></b>：那份 NES 像素字体里 a-z 的**字形与 A-Z 完全相同**
         /// （`fontTools` 量得 `b`/`B`、`y`/`Y` … 的轮廓盒逐个相等）⇒ 它把 `by clover-engine`
-        /// 渲染成 `BY CLOVER-ENGINE`。全局 skill §1.6 要求署名**逐字**（含大小写），所以这一行
         /// 必须换成一份**真有小写字形**的像素字体。
         /// </para>
         /// <para>
-        /// 出处（§0.5 降级链：从原版载体里解析 / 搬运，不是自己造）：
         /// `原版资源/参考工程/SMB-clone/Assets/Fonts/prstart.ttf`（"Press Start"，8×8 像素字体，
-        /// 2048 upem；`y`/`g` 的轮廓盒下探 -256 units ⇒ 有真下伸部）→ 按 §1.9 复制成
         /// <c>Resources/Fonts/PressStart2P.ttf</c>（逐字节相同，21320 字节，SHA256 见
         /// `原版资源/清单.md`）。复核命令：`.ai-tmp/test/font_predict.py`（量字形盒）。
         /// </para>
@@ -196,7 +191,7 @@ namespace SuperMario.Core
         /// <summary>
         /// 绿龟行走的两帧（38 = 一帧、40 = 另一帧）。
         /// <para>
-        /// ⚠️ <b>别再换回 76/77/78</b>：那三张是这张表里<b>另一只</b>暗色乌龟
+        /// <b>别再换回 76/77/78</b>：那三张是这张表里<b>另一只</b>暗色乌龟
         /// （主色 <c>#004058</c> 占到 74%，整体看着就是"墨绿、几乎只剩描边"），
         /// 而绿龟的配色是 <c>#E45C10</c>（橙脚）+ <c>#008888</c>（青壳）+ <c>#F0D0B0</c>（白脸）——
         /// 与参考截图 <c>_assets_tmp/SMB-clone/Screenshots/world1-2.jpg</c> 量到的主色
@@ -215,7 +210,6 @@ namespace SuperMario.Core
         /// 乌龟缩进壳里（静止与被踢滑行都用它）。
         /// <para>
         /// <c>smb_enemies_sheet_42</c>：18x16、<b>以 <c>#008888</c> 青绿为主</b>（86 个像素），
-        /// 与参考截图里乌龟的主色一致（原先指向的 <c>#78</c> 主色是深色 <c>#004058</c>，是另一只）。
         /// 它和 41 属于同一形状家族（两两差异仅 38）：41 底部多两只脚，42 是干净的圆壳，故取 42。
         /// </para>
         /// </summary>
@@ -245,7 +239,7 @@ namespace SuperMario.Core
         /// <summary>
         /// 旗杆：杆身 / 顶球 / 旗子。
         /// <para>
-        /// ⚠️ **这三张图的编号是逐像素量出来的，不是按网格猜的** —— 原表
+        /// **这三张图的编号是逐像素量出来的，不是按网格猜的** —— 原表
         /// <c>FlagpoleSprites.png</c>（80×32）的版式是「<b>上排：旗 + 球；下排：旗 + 杆</b>」，
         /// 也就是**一个球和它自己的杆不在同一 16 像素行里**，所以按 16×16 网格行优先硬切
         /// 必然把图形切坏：
@@ -256,8 +250,6 @@ namespace SuperMario.Core
         /// <item><c>_6</c>(x16..31,y16..31) = **绿杆**（2px 宽，x23..24，向下贯穿整格）</item>
         /// </list>
         /// <para>
-        /// <b>踩过的坑</b>：这里原先写的是 <c>_0</c> 当杆身、<c>_2</c> 当旗子 ——
-        /// 于是那片"斜切白旗"被纵向拉伸 9 倍（玩家看到的就是"一张被拉得很高的图"），
         /// 而"旗子"位置站着的是 <c>_2</c> 那个银球。**素材表一定要看像素，不能按网格推。**
         /// </para>
         /// </summary>
@@ -326,7 +318,6 @@ namespace SuperMario.Core
         /// <summary>
         /// 火马里奥蹲下。
         /// <para>
-        /// ⚠️ <b>这张切片原来是错的，别再切回去</b>：原文件是一张 <b>18x32 的站立火马里奥</b>
         /// （和 <c>Fire_Idle</c> 一样高、轮廓也直立），于是"火马里奥按 ↓ 蹲下"在画面上
         /// <b>毫无变化</b>（碰撞盒其实变小了，但贴图还是站着的）—— 所以它看起来像"下蹲功能没做"。
         /// </para>
@@ -371,8 +362,6 @@ namespace SuperMario.Core
         /// **与"进管"共用同一个采样**，不是另挑一个音 —— 出处是素材包自己的**文件名**
         /// <c>Resources/Sound/SFX/pipepowerdown.wav</c>：原版素材把它命名成 "pipe" + "powerdown"
         /// 一个名字，即"进管 / 掉能力"两用（原版马里奥受伤降级与钻进水管响的是同一个音）。
-        /// 本工程此前只把它接给了进管（<see cref="Pipe"/>），受伤那条路一声不响 ——
-        /// 用户 2026-09-20 点名「受伤没有音效」。
         /// </para>
         /// </summary>
         public const string PowerDown = Pipe;

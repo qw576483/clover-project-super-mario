@@ -47,13 +47,11 @@ namespace SuperMario.App
 
         private void Awake()
         {
-            // ★ 宿主行为（后台运行 / 重复驱动器守卫 / AudioListener 归属）**全部下发给引擎** ——
-            //   这三件事原先都在这里手写，而写错的后果都是**静默**的（见 EngineHostOptions 的 XML）。
-            //   ⚠️ 必须在 Game.Launch **之前**：DuplicateInstanceGuard / OwnAudioListener 是
+            // 宿主行为（后台运行 / 重复驱动器守卫 / AudioListener 归属）**全部下发给引擎** ——
+            //   必须在 Game.Launch **之前**：DuplicateInstanceGuard / OwnAudioListener 是
             //   "创建宿主时执行一次"的动作，而宿主由 Launch 里的 EngineRunner.Ensure 创建 ——
             //   宿主已存在时才配会记一条 Warn 且**不生效**（Runtime/Core/EngineRunner.cs 的 Configure）。
             //
-            //   ① RunInBackground：Unity 默认【编辑器窗口失焦就停止推进帧循环】。踩过的坑：跑自动化
             //      验证时（AI 用 CLI 驱动编辑器、或人切去看别的窗口）窗口一失焦 Time.frameCount 就冻住
             //      —— 实测两分钟只走 2 帧；现象极具误导性（启动画面的 1.8 秒定时器永不触发、流程卡死在
             //      Boot、日志停在 "→ Boot" 之后再无输出），看着像状态机坏了，实际游戏代码一行问题都没有。
@@ -63,7 +61,7 @@ namespace SuperMario.App
             //   ③ OwnAudioListener：监听器由宿主（DontDestroyOnLoad）**独占** —— 否则切场景就丢，
             //      Unity 每帧刷一条 "There are no audio listeners in the scene"（实测把 Editor.log
             //      刷到 74MB，并把真正的问题全部淹掉）。
-            //      ⚠️ 代价（引擎 XML 已写明）：监听器落在原点上的宿主上 ⇒ **3D 音效衰减按原点算**。
+            //      代价（引擎 XML 已写明）：监听器落在原点上的宿主上 ⇒ **3D 音效衰减按原点算**。
             //      本项目判定【可用】：音效全部走 `AudioModule` → `Game.Sound.PlaySFX`（2D，spatialBlend = 0），
             //      全工程**没有任何 PlaySFXAt 调用**（判据：`grep -rn "PlaySFXAt" client/Assets` → 0 命中；
             //      同一条 grep 也跑在 `.ai-tmp/test/sink-c-takeover-selfcheck.ps1` 里）
@@ -98,7 +96,6 @@ namespace SuperMario.App
             Game.Launch(config);
             CloverRes.Init(config.ResourceRoot);
             CloverInput.Init();
-            // 这里原先还有一句 EnsureAudioListener()：监听器的归属已由上面的
             // `Game.ConfigureHost(OwnAudioListener = true)` 在**创建宿主时**交给引擎
             // （宿主上挂一个、并把场景里其它的禁掉，每个留一条 Info）—— 本项目不再自己找、
             // 也不再自己 `FindObjectsByType<AudioListener>()` 扫全场景。
