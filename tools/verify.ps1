@@ -15,9 +15,12 @@ function Say([string]$status, [string]$name, [string]$detail) {
 # ===========================================================================
 #  tools/verify.ps1 -- the one-command re-check of this project.
 #
-#  Cut on 2026-09-24 (team sink4 / piece cut-mario): 24 judged lines -> 6, and
-#  ONLY the judges that can name a concrete real defect they caught here are
-#  left. What each one caught:
+#  Trimmed to the THREE REQUIREMENTS (2026-09-24, team-lead "gate trim"): a
+#  judge survives only if it is one of the three things a machine has to settle --
+#  (1) a REAL build, (2) delivery hygiene, (3) references reachable incl. image
+#  freshness -- plus verify-entry, which is a precondition (the gate must not be a
+#  lie about itself).  This project has no offline build of its own, so the
+#  surviving judges are:
 #    * verify-entry       -- the entry itself runs and parses.
 #    * delivery-hygiene   -- one-off files / handoff docs / artifacts that
 #                            escaped the project / forensic shots inside
@@ -26,12 +29,6 @@ function Say([string]$status, [string]$name, [string]$detail) {
 #                            left a one-off report OUTSIDE the project, and a
 #                            whole evidence batch was deleted together with
 #                            files the ledger still named.
-#    * brand-credit       -- the RENDERED "by clover-engine" line, both screens.
-#                            Caught two real user-reported defects: the title
-#                            screen had no credit line at all, and the boot line
-#                            rendered as "BY CLOVER-ENGINE" although its source
-#                            text was correct (the NES pixel font maps a-z onto
-#                            the A-Z glyph shapes).
 #    * evidence-freshness -- a shot must not be older than the newest source of
 #                            its OWN area (per-area map; that map is also the
 #                            single source of `-Reshoot` scenes).
@@ -40,12 +37,15 @@ function Say([string]$status, [string]$name, [string]$detail) {
 #    * shot-citations     -- every evidence image the acceptance table cites
 #                            must exist.
 #
-#  Removed on purpose, because no real defect could be named for any of them
-#  (they were ceremony, or they cried wolf): acceptance-table summary counts,
-#  allowed-diff column counting, row evidence categories, the dispatch ledger,
-#  the Play ledger, contact-sheet cell bookkeeping, evidence-economy caps,
-#  freeze-before-capture, baseline/spec-doc presence, and the banned-API grep
-#  (0 hits since the first run -- the hard rules live in the skill, not here).
+#  Removed in this trim: brand-credit (the RENDERED "by clover-engine" line on
+#  both screens -- that is a look-at-the-screen judgement, not a script's).
+#  Removed earlier (2026-09-24, team sink4 / piece cut-mario), because no real
+#  defect could be named for any of them (they were ceremony, or they cried
+#  wolf): acceptance-table summary counts, allowed-diff column counting, the
+#  dispatch ledger, the Play ledger, contact-sheet cell bookkeeping,
+#  evidence-economy caps, freeze-before-capture, baseline/spec-doc presence, and
+#  the banned-API grep (0 hits since the first run -- the hard rules live in the
+#  skill, not here).
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -124,28 +124,6 @@ function Newest-AreaFile([string[]]$paths) {
 function Get-AreaOf([string]$name) {
   foreach ($a in $areas) { if ($name -match $a.p) { return $a } }
   return $null
-}
-function Get-AreaByName([string]$name) {
-  foreach ($a in $areas) { if ($a.n -eq $name) { return $a } }
-  return $null
-}
-
-# Credit-report readers (used by brand-credit below).
-function Credit-Line([string]$txt, [string]$scope, [string]$key) {
-  foreach ($ln in ($txt -split "`n")) {
-    if ($ln.TrimEnd("`r").StartsWith("credit|$scope|") -and $ln.Contains($key)) { return $ln.TrimEnd("`r") }
-  }
-  return ''
-}
-function Credit-Grab([string]$line, [string]$pattern) {
-  $m = [regex]::Match($line, $pattern)
-  if ($m.Success) { return $m.Groups[1].Value }
-  return ''
-}
-function Credit-Num([string]$line, [string]$pattern, [double]$default) {
-  $m = [regex]::Match($line, $pattern)
-  if ($m.Success) { return [double]$m.Groups[1].Value }
-  return $default
 }
 
 try {
@@ -274,107 +252,7 @@ if ($specTxt -ne '') {
 }
 $visRowEv = @($rowEv | Where-Object { $_.Vis })
 
-# --- 4) brand credit: the RENDERED line, on BOTH screens --------------------
-# Judged on what is RENDERED, never on the source text (skill 6 item 9). The old shape grepped the source
-# for 'by clover-engine', so it stayed green through both real defects:
-#   (a) the TITLE screen had no credit line at all;
-#   (b) the boot line's source text was right but the NES pixel font maps a-z onto UPPERCASE glyph shapes,
-#       so the screen showed 'BY CLOVER-ENGINE'.
-# Judge = the runtime UI node tree + the pixels of the live screen: probe scene 'credit' writes
-# .ai-tmp/screenshots/credit-render.txt (text / font / visibility / anchors, the font's real glyph boxes,
-# the ink profile of the bottom strip, plus the measured strip saved as an image). The probe also ships
-# two reverse-self-check entries ('credit-case' = text forced to upper case, 'credit-missing' = line
-# hidden); each stamps tamper=<tag> in the report header, which is rejected here AND fails on its own
-# (measured 2026-09-19: both turned this check red, then a clean re-run restored green). Re-run the probe
-# after any UI/font change -- a stale report is a FAIL.
-$credit  = 'by clover-engine'
-$repPath = Join-Path $shotDir 'credit-render.txt'
-$report  = ''
-if (Test-Path $repPath) { $report = Read-Utf8 $repPath }
-
-if ($report -eq '') {
-  $fail++; Say 'FAIL' 'brand-credit' "no runtime render report at .ai-tmp/screenshots/credit-render.txt (run probe scene 'credit'; it is written by measurement, not by hand)"
-} else {
-  $bad = @()
-  $tamper = Credit-Grab $report 'tamper=([a-z]+)'
-  if ($tamper -ne 'none') { $bad += "report header says tamper='$tamper' -- that is a reverse-self-check run, not a delivery measurement" }
-  foreach ($scope in @('menu', 'boot')) {
-    $head = Credit-Line $report $scope 'panel='
-    $txtL = Credit-Line $report $scope 'text='
-    $fntL = Credit-Line $report $scope 'font='
-    $metL = Credit-Line $report $scope 'fontMetrics'
-    $pxL  = Credit-Line $report $scope 'pixels'
-    $ancL = Credit-Line $report $scope 'anchor'
-    if ($head -eq '' -or $txtL -eq '' -or $fntL -eq '' -or $metL -eq '' -or $pxL -eq '') {
-      $bad += "${scope}: report has no complete measurement block"; continue
-    }
-    foreach ($k in 'open=true', 'label=Signature', 'found=true', 'active=true', 'visible=true', 'exact=true') {
-      if (-not $head.Contains($k)) { $bad += "${scope}: '$k' not satisfied -> $head" }
-    }
-    # each scope must be the PANEL THAT OWNS THAT SCREEN -- "some panel somewhere carries the string" does
-    # not satisfy the rule, and neither does a label on an inactive / other panel.
-    $wantPanel = if ($scope -eq 'menu') { 'panel=MainMenuPanel' } else { 'panel=BootPanel' }
-    if (-not $head.Contains($wantPanel)) { $bad += "${scope}: the measured label is not on $wantPanel -> $head" }
-    # the text must be the required string EXACTLY (case-sensitive: 'BY clover-engine' must fail)
-    $got = Credit-Grab $txtL 'text="([^"]*)"'
-    if (-not ($got -ceq $credit)) { $bad += "${scope}: rendered text is '$got', required exactly '$credit'" }
-    # the font must be the lowercase-capable one, and its a-z glyphs must NOT equal the A-Z shapes
-    $fname = Credit-Grab $fntL 'font=([^ ]+)'
-    if (-not ($fname -ceq 'PressStart2P')) { $bad += "${scope}: label font is '$fname', required 'PressStart2P' (the NES pixel font renders a-z as A-Z)" }
-    $lower = Credit-Grab $metL 'lowercaseShaped=([a-z]+)'
-    if ($lower -ne 'true') { $bad += "${scope}: font glyph boxes say lowercaseShaped=$lower (a-z must differ from A-Z and 'y' must descend) -> $metL" }
-    # pixels of the live screen's bottom strip: a real lowercase line has x-height glyphs, so the top rows
-    # of the ink band carry far less ink than the middle rows (all-uppercase shapes make every row equally
-    # dense: ratio ~0.9; true lowercase ~0.2 -- require < 0.5). The glyph-run criterion is derived from the
-    # FONT FILE by tools/probes/font_predict.py, not from our own render: prstart.ttf at 16px gives 10 of
-    # 15 runs >= 3px shorter than the tallest, the old NES font gives exactly 1 (so shortRuns >= 6 splits
-    # "really lowercase" from "a-z drawn as A-Z" by construction).
-    $ink   = [int](Credit-Num $pxL 'ink=(\d+)' -1)
-    $ratio = Credit-Num $pxL 'topRatio=([-\d.]+)' -1
-    $gap   = [int](Credit-Num $pxL 'bandBottomGapPx=(-?\d+)' -1)
-    $short = [int](Credit-Num $pxL 'shortRuns=(\d+)' -1)
-    $hmax  = [int](Credit-Num $pxL 'hMax=(\d+)' -1)
-    $off   = [int](Credit-Num $pxL 'screenCenterOffsetPx=(-?\d+)' 9999)
-    if ($ink -lt 20) { $bad += "${scope}: no/negligible ink on the line's own rect (ink=$ink) => nothing was rendered there -> $pxL" }
-    if ($short -lt 6) { $bad += "${scope}: only $short glyph run(s) are shorter than hMax-3 (hMax=$hmax) => the shapes on screen are NOT lowercase -> $pxL" }
-    if ($ratio -lt 0 -or $ratio -ge 0.5) { $bad += "${scope}: ink band is uniformly dense (topRatio=$ratio >= 0.5) => the glyphs are NOT lowercase -> $pxL" }
-    if ($gap -lt 0 -or $gap -gt 64) { $bad += "${scope}: credit line sits $gap px above the bottom edge (must be at the bottom, <= 64) -> $pxL" }
-    if ($off -eq 9999) { $bad += "${scope}: no screen-centre offset was measured -> $pxL" }
-    elseif ([Math]::Abs($off) -gt 4) { $bad += "${scope}: credit line is off-centre by $off px (must be bottom-CENTRE) -> $pxL" }
-    $crop = Credit-Grab $pxL 'crop=([^ ]+)'
-    if ($crop -eq '' -or $crop -eq 'none') { $bad += "${scope}: the measured strip was not saved as an image -> $pxL" }
-    elseif (-not (Test-Path (Join-Path $shotDir $crop))) { $bad += "${scope}: evidence crop '$crop' is missing from .ai-tmp/screenshots -> $pxL" }
-    # the title-screen line must be anchored to the bottom centre (not a fixed offset that can fall off)
-    if ($scope -eq 'menu') {
-      if (-not ($ancL.Contains('min=(0.50,0.00)') -and $ancL.Contains('max=(0.50,0.00)'))) {
-        $bad += "menu: credit line is not anchored to the bottom centre -> $ancL"
-      }
-    }
-  }
-
-  # the report is runtime evidence: it must be newer than the files that can change THAT LINE -- the area
-  # map's ui-credit entry (menu/boot panels + UIBuilder + ResPaths + fonts). It must NOT be compared
-  # against the project-wide newest file: a level-data or gameplay edit cannot change the credit line, and
-  # doing exactly that produced a false FAIL on this project.
-  $ca = Get-AreaByName 'ui-credit'
-  $newest = $null
-  if ($ca) { $newest = Newest-AreaFile $ca.d }
-  if ((Test-Path $repPath) -and $newest) {
-    $rep = Get-Item $repPath
-    if ($rep.LastWriteTime -lt $newest.LastWriteTime) {
-      $bad += "the render report ($($rep.LastWriteTime)) is OLDER than $($newest.Name) ($($newest.LastWriteTime)) => re-run probe scene 'credit'"
-    }
-  }
-
-  if ($bad.Count -eq 0) {
-    Say 'PASS' 'brand-credit' "rendered on BOTH screens (title scope 'menu' + boot scope 'boot'): text '$credit' exact (case-sensitive), font PressStart2P, lowercase glyphs in the pixels (shortRuns>=6 / topRatio<0.5), bottom-centre, report newer than area ui-credit's newest source"
-  } else {
-    $fail++; Say 'FAIL' 'brand-credit' "$($bad.Count) assertion(s) failed on the RENDERED credit line / its freshness"
-    $bad | ForEach-Object { Write-Output ('            ' + $_) }
-  }
-}
-
-# --- 5) evidence freshness (per area) --------------------------------------
+# --- 4) evidence freshness (per area) --------------------------------------
 $srcNewest = Get-ChildItem $srcDir -Recurse -Filter *.cs -File -ErrorAction SilentlyContinue |
              Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $lvlNewest = Get-ChildItem (Join-Path $root 'client\Assets\Resources\Levels') -Recurse -Filter *.txt -File -ErrorAction SilentlyContinue |
@@ -419,7 +297,7 @@ if ((Test-Path $shotDir) -and $code) {
   }
 } else { $human++; Say 'HUMAN-ONLY' 'evidence-freshness' 'no screenshot dir or no source' }
 
-# --- 6a) citation refs: every file a citation names must resolve on disk -----
+# --- 5a) citation refs: every file a citation names must resolve on disk -----
 # Judged by REACHABILITY, not by line number: line numbers move with every edit, so a red there could not
 # be fixed by our code (skill 5 item 3) and would cry wolf.
 # The original-asset carrier ('<root>/<carrier>') and .ai-tmp are skipped on purpose: the carrier is
@@ -488,7 +366,7 @@ if ($citTok.Count -eq 0) {
   $citBad | Select-Object -First 20 | ForEach-Object { Write-Output ('            ' + $_) }
 }
 
-# --- 6b) shot citations: every cited evidence image must exist ---------------
+# --- 5b) shot citations: every cited evidence image must exist ---------------
 # Scope = the VISUAL delivery rows (a numeric row's illustrative png is not evidence: its evidence is a
 # runtime log line), so the list below is what a reader of the table would actually open.
 $shotTok = @{}
