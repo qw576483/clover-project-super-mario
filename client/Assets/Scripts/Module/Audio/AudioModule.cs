@@ -43,8 +43,8 @@ namespace SuperMario.Module.Audio
                 Game.Logger.Warn("Audio", $"Game.Sound 未就绪，跳过音效 {clip}");
                 return;
             }
-            // 静音时不发起播放（与旧行为一致）：引擎那边即使播了也是 0 音量，
-            // 但会白占一个音源、白加载一次音频 —— 所以这里照旧早退。
+            // 静音时不发起播放：引擎那边即使播了也是 0 音量，
+            // 但会白占一个音源、白加载一次音频 ⇒ 这里直接早退。
             if (Game.Sound.IsMuted(SoundGroup.SFX)) return;
             Game.Sound.PlaySFX(clip);
         }

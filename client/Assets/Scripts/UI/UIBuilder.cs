@@ -132,13 +132,12 @@ namespace SuperMario.UI
 
         public const string CreditText = "by clover-engine";
 
-        // ───────── 本文件保留的"薄包装"是什么、为什么还留着 ─────────
+        // ───────── 本文件保留的"薄包装"─────────
         //
         // 建件（节点 / 纯色块 / 文字 / 按钮）**全部**转发引擎 `CloverEngine.UIFactory`
-        // （`Runtime/Presentation/UIWidgets.cs` + `UIWidgetControls.cs`），本项目不再自己写
+        // （`Runtime/Presentation/UIWidgets.cs` + `UIWidgetControls.cs`）。
         //
-        // 只留三样**项目内容**在这里，引擎按设计**不含**它们（见 UIWidgetControls.cs 文件头
-        // 「没有下沉：配色 / 文案 / 字号档位都是业务取值」）：
+        // 只留三样**项目内容**在这里，引擎按设计**不含**它们（配色 / 文案 / 字号档位都是业务取值）：
         //   ① NES 像素字体（`Font` 属性：预热 + 同步取 + 回落 + 留痕）；
         //   ② 字号吸附到 16 的整数倍（`SnapFontSize`）；
         //   ③ 像素色板（SkyBlue / TitleBg / Brick / CoinGold / Black —— 全是"复刻 NES 画面"的实测色）。

@@ -323,7 +323,8 @@ namespace SuperMario.Core
         //   （同一条证据链：`Mario.cs:36` `maxWalkSpeedX = 5.86` 与本工程量到的走速 5.86 格/秒一致）
         //   ⇒ 就是「格/秒」。
         //
-        //   它也不是"减速度后的稳态"——本工程的火球水平分量本来就是恒速（`Fireball.Update` 每帧
+        //   水平分量恒速（`:26` 每帧按 `directionX * absVelocity.x` 覆写 `velocity.x`），
+        //   不存在"减速后的稳态"。
 
         /// <summary>火球水平速度（格/秒，恒速）—— 出处 clone `MarioFireball.cs:8` `.x = 20`（`:21`/`:26` 写进 `velocity`）。</summary>
         public const float FireballSpeed = 20f;
@@ -331,7 +332,7 @@ namespace SuperMario.Core
         /// <summary>
         /// 火球竖直速度分量（格/秒）—— 出处 clone `MarioFireball.cs:8` `.y = 11`。
         /// <para>同一个分量兼任三处：初速下落（`:21` `-absVelocity.y`）、撞地反弹（`:50` `+absVelocity.y`）、
-        /// 撞顶压回（`:52` `-absVelocity.y`）。原实现的三处各用各的数（`+2` / `12` / `0`）且都没出处。</para>
+        /// 撞顶压回（`:52` `-absVelocity.y`）。</para>
         /// </summary>
         public const float FireballVelocityY = 11f;
 

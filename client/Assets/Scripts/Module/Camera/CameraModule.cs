@@ -93,11 +93,11 @@ namespace SuperMario.Module.CameraRig
         }
 
         /// <summary>
-        /// 屏幕抖动。**抖动的实现收敛到引擎** <see cref="ICameraManager.Shake"/>（强度随时间线性衰减 +
-        /// 圆内随机偏移），本项目只保留"强度 → (时长, 最大偏移)"这一步换算：
+        /// 屏幕抖动。抖动由引擎 <see cref="ICameraManager.Shake"/> 实现（强度随时间线性衰减 +
+        /// 圆内随机偏移），本项目只做"强度 → (时长, 最大偏移)"这一步换算：
         /// <list type="bullet">
-        /// <item>最大偏移：旧实现每轴 <c>Random.Range(-1,1) * _shake * 0.2</c> ⇒ 每轴极值 = <c>strength × 0.2</c>
-        /// （引擎的 <c>intensity</c> 就是"最大偏移"，口径一致）。</item>
+        /// <item>最大偏移 = <c>strength × 0.2</c>（<see cref="ShakeOffsetScale"/> 是每轴极值）；
+        /// 引擎的 <c>intensity</c> 就是"最大偏移"，两者同口径。</item>
         /// </list>
         /// <para>未就绪（引擎没起）时不静默：留一条 Warn（否则"该抖没抖"会被当成震屏坏了）。</para>
         /// </summary>

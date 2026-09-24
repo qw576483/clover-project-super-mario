@@ -587,8 +587,7 @@ namespace SuperMario.Module.Player
         /// 跳跃与重力（clone `Mario.cs:186-212` 的搬运）：
         /// ① 起跳瞬间按**当前水平速度**取一组参数（起跳初速 + 上升 / 下落两个重力）；
         /// ② "按得越久跳得越高"在原版里靠的就是**变重力**（上升且按住 A 用较小的重力）；
-        /// ③ 原版**没有**"松手截断上升速度"这套机制，所以本工程也不再截断
-        ///    （曾经有一个 `JumpCutVelocity`，那是本工程自己加的，已删）。
+        /// ③ 原版**没有**"松手截断上升速度"这套机制，本工程同样不截断。
         /// </summary>
         private void JumpAndGravity(float dt)
         {
@@ -945,10 +944,9 @@ namespace SuperMario.Module.Player
             return h;
         }
 
-        // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
+        // ───────── 逐格扫描（走引擎 GridUtil）─────────
         //
-        // 它与 ItemModule / FireballModule / EnemyModule 里那三份**逐字相同** ⇒ 已下沉为引擎
-        // `CloverEngine.GridUtil`（出处见 `Runtime/Core/GridUtil.cs` 文件头，它逐字复刻了原口径：
+        // 枚举格走引擎 `CloverEngine.GridUtil`（出处见 `Runtime/Core/GridUtil.cs` 文件头，口径与 clone 一致：
         // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
         // 连那个 `- 0.0001f` 收边量都保留为 `GridUtil.EdgeEpsilon`）。
         //
@@ -957,9 +955,8 @@ namespace SuperMario.Module.Player
         //    "委托已缓存"时才不分配 —— 引擎文件头 GC 写明「方法组写法在 Unity 的 C# 9 下
         //    每次转换也分配一个委托」⇒ 下面四个委托都**存进字段**。
         //
-        // 算法本身一字未动（用多大半径、几点采样、撞墙是停还是滑 = 玩法手感，引擎明确不管，
-        //    见 Runtime/Presentation/Map.cs:14-15）：仍是逐轴解算、仍是"命中第一格就停"，
-        //    只是"怎么枚举格"从自写迭代器换成引擎能力。
+        // 解算口径（用多大半径、几点采样、撞墙是停还是滑 = 玩法手感，引擎明确不管，
+        //    见 Runtime/Presentation/Map.cs:14-15）：逐轴解算、命中第一格就停。
         //
         // 状态也都放字段（委托不捕获局部变量 ⇒ 无闭包分配）。这三个方法彼此不重入：
         // 它们各在 MoveAndCollide / Depenetrate 的**线性**流程里被调一次。

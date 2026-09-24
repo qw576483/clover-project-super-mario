@@ -367,7 +367,7 @@ namespace SuperMario.Module.Flow
             // 恢复成 1 —— 也就是 `→ Stage`（原版世界真正开始跑的那一帧）才恢复。
             //
             // 冻住之后 `Time.time` / `Time.deltaTime` **都不再前进**，所以本状态里所有的等待
-            // 都必须走 unscaled 口径（引擎 Timer 的教训：`timeScale = 0` 时普通 `Timer.After` 永不触发）。
+            // 都必须走 unscaled 口径（`timeScale = 0` 时普通 `Timer.After` 永不触发）。
             Time.timeScale = 0f;
             _loadingStart = Time.unscaledTime;
             // 给这一次 Loading 发一个号：看门狗拿它认"我等的还是不是我那一次"（见下面注册处）。
@@ -609,7 +609,7 @@ namespace SuperMario.Module.Flow
                     more = active.Score.TallyTimeUnit(GameConst.ScorePerTime);
                     active.Audio.PlaySfx(Sfx.Beep);
                 }
-                if (more) return;      // 还在跳：这一帧别往下走（E-20 的教训：分支里该 return 就 return）
+                if (more) return;      // 还在跳：这一帧直接 return，等下一帧继续兑
 
                 //   这一段只负责"停留一会再进下一关 / 结算屏"。
                 Game.Logger.Info("Flow",
@@ -867,9 +867,8 @@ namespace SuperMario.Module.Flow
 
         /// <summary>
         /// 剩 100 秒：原版会喊一声 hurry-up（音乐也转快节奏）。
-        /// <para>踩过的坑：<see cref="Events.HurryUp"/> 一直是"有人发、没人收" ——
-        /// ScoreModule 到点发了事件，但全项目没有监听者，于是这声提示从来没响过，
-        /// Sfx.HurryUp 与 hurryup.wav 都成了死资源。事件名定义了不等于接上了。</para>
+        /// <para><see cref="Events.HurryUp"/> 由 ScoreModule 到点发出，本方法接到后播 <c>Sfx.HurryUp</c>
+        /// （hurryup.wav）—— 事件名定义了必须有人接上，否则这声提示不会响。</para>
         /// </summary>
         private void OnHurryUp()
         {

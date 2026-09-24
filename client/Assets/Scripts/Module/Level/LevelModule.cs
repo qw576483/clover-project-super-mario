@@ -185,12 +185,10 @@ namespace SuperMario.Module.Level
         public float PipeRiseY { get; private set; }
 
         /// <summary>
-        /// 空间事实面（实心位图 + 移动托台顶高 + 世界边界）—— **收敛到引擎 <see cref="TileWorld"/>**。
+        /// 空间事实面（实心位图 + 移动托台顶高 + 世界边界）—— 由引擎 <see cref="TileWorld"/> 承担。
         /// <para>
-        /// 181-215 行（<c>HashSet&lt;int&gt;</c> 位图 + <c>Dictionary&lt;int,float&gt;</c> 托台 + <c>Key(tx,ty)</c>）
-        /// 逐字下沉的。收下它是为了消掉那套 32 位键：`(tx &lt;&lt; 16) ^ (ty + 512)` 在 |tx| ≥ 2^15
-        /// 或 ty 超出 [-512, 65022] 时会**键碰撞** ⇒ 误判实心（"明明没有砖却撞上了"，且不报错）。
-        /// 引擎换成了 64 位双射键。
+        /// 键是 64 位双射 <c>(tx, ty)</c>：不会像 32 位键 `(tx &lt;&lt; 16) ^ (ty + 512)` 那样在 |tx| ≥ 2^15
+        /// 或 ty 超出 [-512, 65022] 时**键碰撞** ⇒ 误判实心（"明明没有砖却撞上了"，且不报错）。
         /// </para>
         /// <para>
         /// 边界口径由引擎 <c>Runtime/Presentation/Map.cs:14-15</c> 划死：本类**只搬"空间事实"**

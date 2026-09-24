@@ -124,9 +124,7 @@ namespace SuperMario.Module.Entities
         private SpriteRenderer _sr;
         private readonly List<Sprite> _boom = new List<Sprite>();
 
-        /// <summary>
-        /// 逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）—— 收敛掉自写的
-        /// </summary>
+        /// <summary>逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）：帧表 + fps 给一次，切帧由引擎统一实现。</summary>
         private SpriteFrameAnimator _anim;
 
         private Vector2 _vel;
@@ -237,17 +235,16 @@ namespace SuperMario.Module.Entities
             if (this != null && gameObject != null) Destroy(gameObject);
         }
 
-        // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
+        // ───────── 逐格扫描（走引擎 GridUtil）─────────
         //
-        // 与 PlayerActor / ItemModule / EnemyModule 三处**逐字相同** ⇒ 已下沉为
-        // `CloverEngine.GridUtil`（出处与逐字复刻的口径见 `Runtime/Core/GridUtil.cs` 文件头：
+        // 枚举格走 `CloverEngine.GridUtil`（出处与逐字复刻 clone 的口径见 `Runtime/Core/GridUtil.cs` 文件头：
         // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
         // 那个 `- 0.0001f` 收边量即 `GridUtil.EdgeEpsilon`）。
         //
         // 用 `ForEach` 而不是迭代器 `GridUtil.Enumerate`（后者每次调用都分配），并且把委托
         //    **缓存到字段** —— 引擎文件头 GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个
         //    委托」；状态也放字段 ⇒ 回调不捕获局部变量、整条火球热路径零分配。
-        // 算法一字未动：仍是"X 撞墙即炸 / Y 落地反弹"，仍是"命中第一格就停"。
+        // 解算口径：X 撞墙即炸 / Y 落地反弹，命中第一格就停。
 
         /// <summary>缓存的逐格回调（热路径不分配，见上）。</summary>
         private Action<int, int> _onScanTile;
