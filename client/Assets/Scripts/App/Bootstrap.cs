@@ -64,7 +64,7 @@ namespace SuperMario.App
             //      代价（引擎 XML 已写明）：监听器落在原点上的宿主上 ⇒ **3D 音效衰减按原点算**。
             //      本项目判定【可用】：音效全部走 `AudioModule` → `Game.Sound.PlaySFX`（2D，spatialBlend = 0），
             //      全工程**没有任何 PlaySFXAt 调用**（判据：`grep -rn "PlaySFXAt" client/Assets` → 0 命中；
-            //      同一条 grep 也跑在 `.ai-tmp/test/sink-c-takeover-selfcheck.ps1` 里）
+            //      同一条 grep 由离线自检脚本执行）
             //      ⇒ 没有按位置衰减的音效，监听器在原点不影响听感。
             Game.ConfigureHost(new EngineHostOptions
             {

@@ -4,7 +4,7 @@
 # ★ 原版资源（skill §1.9）
 原版资源/
 
-# 项目自身：机器本地 / Unity 模板带来的东西（已移出工程到 .ai-tmp/unused-resources/，可搬回）
+# 项目自身：机器本地 / Unity 模板带来的东西（已移出工程到 .ai-tmp/ 下，可搬回）
 client/setting/
 client/Assets/Welcome/
 client/Assets/Settings/Lit2DSceneTemplate.scenetemplate

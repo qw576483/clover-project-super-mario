@@ -437,7 +437,7 @@ public static class Probe
     /// 在 <paramref name="want"/> 附近找一格"**脚下有地板**、身上没有实心格"的落点并返回它的 x。
     /// <para>
     /// 为什么必须有：`Teleport(x, y)` 只写坐标、不看地形 —— 摆到坑的上方，人**直接掉出世界**
-    /// 1-1 的地板顶 = y=-3 ⇒ 实心格在 y=-4（离线查法：`.ai-tmp/test/ground_gaps_11.py`）。
+    /// 1-1 的地板顶 = y=-3 ⇒ 实心格在 y=-4。
     /// 判据用关卡自己的实心位图（`ILevel.IsSolidTile`），不是我们的猜测。
     /// </para>
     /// </summary>
@@ -1474,7 +1474,7 @@ public static class Probe
         else
         {
             // ① 落点必须是"脚下有地板、身上没有实心格"的格：`Teleport` 只写坐标，摆到坑上方会直接
-            //    实心格在 y=-4（离线查法 `.ai-tmp/test/ground_gaps_11.py`）。
+            //    实心格在 y=-4。
             // ③ 站之前先把附近的栗宝宝撞飞（人不动、不接触）—— 否则站 1.3 秒必被撞死。
             var mx = SafeGroundX(P(koopa).x + 5.0f, -3f);
             KillGoombasNear(mx, 10f);

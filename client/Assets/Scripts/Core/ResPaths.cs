@@ -53,7 +53,7 @@ namespace SuperMario.Core
         /// <para>
         /// `原版资源/参考工程/SMB-clone/Assets/Fonts/prstart.ttf`（"Press Start"，8×8 像素字体，
         /// <c>Resources/Fonts/PressStart2P.ttf</c>（逐字节相同，21320 字节，SHA256 见
-        /// `原版资源/清单.md`）。复核命令：`.ai-tmp/test/font_predict.py`（量字形盒）。
+        /// `原版资源/清单.md`）。
         /// </para>
         /// </summary>
         public const string CreditFont = "Fonts/PressStart2P";

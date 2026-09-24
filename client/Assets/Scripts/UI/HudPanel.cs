@@ -43,7 +43,7 @@ namespace SuperMario.UI
             //     中 0.63672 / 右 0.91016**。
             //   用**归一化锚点**而不是像素偏移：本工程画面是 16:9、原版是 4:3，
             //   像素偏移只在 1920 宽下才等于这几个分数（换分辨率就错位）。
-            //   量测脚本：`.ai-tmp/test/measure_hud.py` 与 `.ai-tmp/test/hud_coin_icon.py`（同一套也量我们自己的截图）。
+            //   量测：同一套量法也量我们自己的截图。
             //
             //   上面那两行区间（89..93 / 97..118）是同一天把基线图逐列扫墨迹扫出来的（脚本可复跑）。
             MakeLabel(bar, "MarioCap", "MARIO", 0.09375f, TextAnchor.MiddleLeft, new Vector2(0f, -28f));

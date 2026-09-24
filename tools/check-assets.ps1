@@ -57,7 +57,7 @@ if ($unused.Count -gt 0) {
         Write-Output ('    {0}  x{1}' -f $_.Name.Replace($res, ''), $_.Count)
     }
     if ($Warn) { Write-Output 'WARN check-assets: unreferenced assets exist (warn mode, not a gate)'; exit 0 }
-    Write-Output 'FAIL check-assets: move them out of Assets (e.g. .ai-tmp/unused-resources/, which is gitignored)'
+    Write-Output 'FAIL check-assets: move them out of Assets (e.g. under .ai-tmp/, which is gitignored)'
     Write-Output '                   rule: reference/rules-full.md 1.9-6/7 -- pull on demand, never bulk.'
     exit 1
 }

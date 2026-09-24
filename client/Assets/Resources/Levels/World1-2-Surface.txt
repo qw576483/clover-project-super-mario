@@ -4,7 +4,7 @@
 # 这一段是原版"地下段侧向管 -> 出管 -> 旗杆 -> 城堡"里的后半段；
 # 旗杆/城堡的坐标由本文件的 # flagpole / # castle 行给出（不再用 MaxWorldX 公式推）。
 # T <x> <y> <layer> <sprite> / E <x> <y> <prefab>
-# 出生点 = 原版 `Spawn Point` 的真值 (0.5,1.5)（出处 `.ai-tmp/test/castlecut_dump.txt` 里那一条
+# 出生点 = 原版 `Spawn Point` 的真值 (0.5,1.5)（出处：原版城堡关位图 dump 里那一条
 #   `Prefabs/_managers/Spawn Point.prefab` 的 world `[0.5, 1.5]`）；它在**出管口里面**，
 #   所以开局要播原版的"从管里升到管顶"过场 —— 终点由下一行 `# pipe-rise` 给。
 # spawn 0.5 1.5

@@ -102,7 +102,7 @@ namespace SuperMario.Module.Level
         /// `# pipe-rise &lt;x&gt; &lt;y&gt;`：本关开局要播"从出管口升起"过场时，**管顶站姿**的脚底坐标。
         /// <para>
         /// 原版 1-2 地表段的出管口就是这种：`Spawn Point @clone (0.5,1.5)` 摆在**管口里**，
-        /// 人从那里升到管顶再接管操作（出处 `.ai-tmp/test/castlecut_dump.txt` 的 `Spawn Point`；
+        /// 人从那里升到管顶再接管操作（出处：原版城堡关位图 dump 的 `Spawn Point`；
         /// 管顶 = 出管那 4 格瓦片 `T 0 0 _18` / `T 1 0 _19` / `T 0 1 _5` / `T 1 1 _6` 的上沿 y=2）。
         /// 起点由 `# spawn` 给（就是原版那个 Spawn Point），本指令只声明终点。
         /// </para>
