@@ -50,30 +50,53 @@ namespace SuperMario.UI
         }
 
         /// <summary>
-        /// 建**引擎署名那一行**（`by clover-engine`）。
+        /// 建**引擎署名那一行**（`by clover-engine`）—— 全项目**唯一**入口。
         /// <para>
-        /// 为什么单独一个入口：这一行的字体与全项目别处**不一样**，而且不能出错 ——
-        /// 全局 skill §1.6 的判据是"渲染出来的字**逐字**对"（含大小写），
-        /// 而项目统一的 NES 像素字体只有大写字形（见 <see cref="Core.ResPaths.CreditFont"/> 的说明），
-        /// 用它就会渲染成 `BY CLOVER-ENGINE` ⇒ 那是本片要修掉的缺陷。
+        /// **建件收敛到引擎** <see cref="UIFactory.CreateCreditLabel"/>：它把"贴父节点底部居中"
+        /// 钉死为底部锚点（左上角锚点 + 大负 y 放底部元素会随 CanvasScaler 掉出屏幕外，实测过），
+        /// 三段式（含字号 / 底距 / 文案默认值）都在那里。
         /// </para>
         /// <para>
-        /// 取字体的顺序（三级，**任何一级都不会用回像素字体**）：
+        /// ⛔ 节点名恒为 <c>Signature</c>：闸门 `engine-credit`（`tools/verify.ps1`）按这个名字在
+        /// MainMenuPanel / BootPanel 上读**运行时**的实际文本与字体，改名即判据失效。
+        /// </para>
+        /// <para>
+        /// 本文件只负责**取字体**这一段项目特有的逻辑（三级，**任何一级都不会用回像素字体**）：
         /// ① 引擎资源缓存里已有小写字体（同步取，正常情况）；
         /// ② 没有 ⇒ 立刻异步装一次，**先用引擎内置字体顶着**（内置字体有小写字形，
-        ///    渲染出来仍是小写，只是字形不是像素风；这一帧的观感差异可忽略）；
-        /// ③ 装配失败 ⇒ 打 Error（§7：非预期分支必须留日志），gate
-        ///    （`tools/verify.ps1` 的 `engine-credit`）会因为字体名对不上而**变红**，
-        ///    不会静默退化成"看起来还行"。
+        ///    渲染出来仍是小写，只是字形不是像素风；这一帧的观感差异可忽略），并在此留一条 Warn；
+        /// ③ 装配失败 ⇒ 打 Error（§7：非预期分支必须留日志），gate `engine-credit`
+        ///    会因为字体名对不上而**变红**，不会静默退化成"看起来还行"。
         /// </para>
+        /// <para>
+        /// ⛔ 为什么不能用 <see cref="Font"/>（本项目像素字体）：那份 NES 像素字体里 a-z 与 A-Z
+        /// 是**同一套字形** ⇒ 源码文本是 `by clover-engine`，画面上却是 `BY CLOVER-ENGINE`（用户肉眼发现的缺陷）。
+        /// 全局 skill §1.6 的判据是"渲染出来的字**逐字**对"，所以这一行必须用真有小写字形的字体
+        /// （出处见 <see cref="Core.ResPaths.CreditFont"/>）。
+        /// </para>
+        /// <para>颜色由调用方给：用户 2026-09-19 明说首页那行要**白色**（引擎默认是 alpha 0.55 的浅色）。</para>
         /// </summary>
-        public static Text CreditLabel(Transform parent, string name, string content, int size,
-                                       TextAnchor anchor, Vector2 anchorPos, Vector2 boxSize, Color color)
+        public static Text CreditLabel(Transform parent, Color color)
         {
-            var t = Label(parent, name, content, size, anchor, anchorPos, boxSize, color);
-            ApplyCreditFont(t);
+            // ① 同步取（正常情况启动期已 Preload）。
+            var font = _creditFont ?? Game.Res?.TryGet<Font>(Core.ResPaths.CreditFont);
+            if (font != null) _creditFont = font;
+            // ② 未驻留：异步装一次；本次先传 null（引擎用内置字体并**限频 Warn 一次**，见 CreateCreditLabel）。
+            else RequestCreditFont();
+
+            var t = UIFactory.CreateCreditLabel(parent, font, CreditFontSize, CreditBottomOffset, CreditText);
+            t.name = "Signature";
+            t.color = color;
+            // 面板是"打开一次建一次"，异步装回来的字体要换到**当前这次**已经建好的那行上。
+            _lastCreditLabel = t;
             return t;
         }
+
+        /// <summary>署名行字号。出处 = 原启动画面 / 标题屏两处各自写的 16。</summary>
+        private const int CreditFontSize = 16;
+
+        /// <summary>署名行离面板底边的距离（画布单位）。出处 = 同上两处原先写的 <c>y = 16</c>。</summary>
+        private const float CreditBottomOffset = 16f;
 
         private static Font _creditFont;
         private static bool _creditFontWarned;
@@ -81,56 +104,51 @@ namespace SuperMario.UI
         /// <summary>最近建出来的那行署名。异步装配回来时要把它也换过来（面板是"开一次建一次"）。</summary>
         private static Text _lastCreditLabel;
 
-        /// <summary>把署名行的字体装到 <paramref name="t"/> 上（见 <see cref="CreditLabel"/> 的三级顺序）。</summary>
-        private static void ApplyCreditFont(Text t)
+        /// <summary>
+        /// 异步装一次署名字体（只发一次请求）。装回来后把**当前那行**也换过来。
+        /// 未装上时先用引擎内置字体顶着（有小写字形 ⇒ 画面上仍是小写，只是字形不是像素风）。
+        /// </summary>
+        private static void RequestCreditFont()
         {
-            if (t == null) return;
-            _lastCreditLabel = t;
-
-            var cached = _creditFont ?? Game.Res?.TryGet<Font>(Core.ResPaths.CreditFont);
-            if (cached != null)
+            if (_creditLoadRequested || Game.Res == null)
             {
-                _creditFont = cached;
-                t.font = cached;
+                if (!_creditFontWarned)
+                {
+                    _creditFontWarned = true;
+                    Game.Logger.Warn("UI", $"署名字体未驻留：{Core.ResPaths.CreditFont}，本次先用引擎内置字体（小写）");
+                }
                 return;
             }
 
-            // ② 未驻留：异步装一次（只发一次请求；接不到就用内置字体顶着）。
-            if (!_creditLoadRequested && Game.Res != null)
+            _creditLoadRequested = true;
+            Game.Res.LoadAsset<Font>(Core.ResPaths.CreditFont, f =>
             {
-                _creditLoadRequested = true;
-                Game.Res.LoadAsset<Font>(Core.ResPaths.CreditFont, f =>
+                if (f == null)
                 {
-                    if (f == null)
-                    {
-                        Game.Logger.Error("UI",
-                            $"署名字体未加载：{Core.ResPaths.CreditFont} —— 那行字会掉回引擎内置字体（仍是小写，但字形不是像素风）");
-                        return;
-                    }
-                    _creditFont = f;
-                    // 面板是"打开一次建一次"，所以要把**当前这次**已经建好的那行也换过来。
-                    if (_lastCreditLabel != null) _lastCreditLabel.font = f;
-                });
-            }
-            else if (!_creditFontWarned)
-            {
-                _creditFontWarned = true;
-                Game.Logger.Warn("UI", $"署名字体未驻留：{Core.ResPaths.CreditFont}，本次先用引擎内置字体（小写）");
-            }
-
-            t.font = UIFactory.DefaultFont();
+                    Game.Logger.Error("UI",
+                        $"署名字体未加载：{Core.ResPaths.CreditFont} —— 那行字会掉回引擎内置字体（仍是小写，但字形不是像素风）");
+                    return;
+                }
+                _creditFont = f;
+                // 面板是"打开一次建一次"，所以要把**当前这次**已经建好的那行也换过来。
+                if (_lastCreditLabel != null) _lastCreditLabel.font = f;
+            });
         }
 
         /// <summary>署名文案。**单一来源**：代码里别处不许再写这一串（§1.6 要求逐字）。</summary>
         public const string CreditText = "by clover-engine";
 
-        // ───────── 下面这三个纯机械函数【委托引擎】 ─────────
+        // ───────── 本文件保留的"薄包装"是什么、为什么还留着 ─────────
         //
-        // 引擎的 UIFactory（`CloverEngine.UIFactory`）本来就提供同一套构件（E2 起对业务公开），
-        // 本项目不再自己维护"锚点 / 铺满"的计算 —— 那类重复实现正是踩坑高发区：
-        // 本文件原先自己写 anchorMin/anchorMax，结果面板根节点只有 100x100 时看不出问题、
-        // 一旦铺满屏幕就让左对齐文案飞出屏幕（详见 Label 的注释）。
-        // 引擎的 UIFactory.Stretch 天生就是"铺满父节点"，用它能直接绕开那类坑。
+        // 建件（节点 / 纯色块 / 文字 / 按钮）**全部**转发引擎 `CloverEngine.UIFactory`
+        // （`Runtime/Presentation/UIWidgets.cs` + `UIWidgetControls.cs`），本项目不再自己写
+        // anchorMin/anchorMax/pivot 那一套计算 —— 那类重复实现正是踩坑高发区（见 Label 的历史注释）。
+        //
+        // 只留三样**项目内容**在这里，引擎按设计**不含**它们（见 UIWidgetControls.cs 文件头
+        // 「⛔ 没有下沉：配色 / 文案 / 字号档位都是业务取值」）：
+        //   ① NES 像素字体（`Font` 属性：预热 + 同步取 + 回落 + 留痕）；
+        //   ② 字号吸附到 16 的整数倍（`SnapFontSize`）；
+        //   ③ 像素色板（SkyBlue / TitleBg / Brick / CoinGold / Black —— 全是"复刻 NES 画面"的实测色）。
 
         /// <summary>建一个铺满父节点的容器（默认用于面板根）。委托 <see cref="UIFactory.CreateNode"/>。</summary>
         public static RectTransform Stretch(Transform parent, string name)
@@ -138,22 +156,16 @@ namespace SuperMario.UI
 
         /// <summary>
         /// 建一个锚定在某个点上的容器（坐标相对锚点）。
-        /// <para>锚点取<b>父节点中心</b>时委托 <see cref="UIFactory.CreateCentered"/>；
-        /// 只有要贴父节点边角（HUD 那种）时才自己设锚点。</para>
+        /// <para>两条路都走引擎：锚点取<b>父节点中心</b>时用 <see cref="UIFactory.CreateCentered"/>，
+        /// 其余用 <see cref="UIFactory.CreateNode"/> + <see cref="UIFactory.Place"/>。</para>
         /// </summary>
         public static RectTransform Node(Transform parent, string name, Vector2 anchor, Vector2 pos, Vector2 size)
         {
             if (anchor == new Vector2(0.5f, 0.5f))
                 return UIFactory.CreateCentered(name, parent, size, pos);
 
-            var go = new GameObject(name, typeof(RectTransform));
-            var rt = (RectTransform)go.transform;
-            rt.SetParent(parent, false);
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
+            var rt = UIFactory.CreateNode(name, parent);
+            UIFactory.Place(rt, anchor, new Vector2(0.5f, 0.5f), pos, size);
             return rt;
         }
 
@@ -162,14 +174,24 @@ namespace SuperMario.UI
             // raycastTarget 传 true：保持与"新建 Image 的默认值"一致，不改变既有行为。
             => UIFactory.CreatePanel(name, parent, color, true);
 
-        /// <summary>建一块纯色块（指定位置与大小）。</summary>
+        /// <summary>
+        /// 建一块纯色块（指定位置与大小）。底板由引擎建（<see cref="UIFactory.CreatePanel"/>）、
+        /// 定位由引擎算（<see cref="UIFactory.Place"/>）—— 本项目只决定"什么颜色、放在哪"。
+        /// </summary>
         public static Image Block(Transform parent, string name, Color color, Vector2 anchor, Vector2 pos, Vector2 size)
         {
-            var rt = Node(parent, name, anchor, pos, size);
-            var img = rt.gameObject.AddComponent<Image>();
-            img.color = color;
+            // raycastTarget 传 true：与旧实现（自建 Image）的默认值一致。
+            var img = UIFactory.CreatePanel(name, parent, color, true);
+            UIFactory.Place(img.rectTransform, anchor, new Vector2(0.5f, 0.5f), pos, size);
             return img;
         }
+
+        /// <summary>
+        /// 像素字号吸附：像素字体只有在 **16 的整数倍**放大时才不糊（见 <see cref="Label"/> 的说明）。
+        /// 不足 16 按 16 处理，其余向下取整到 16 的倍数。
+        /// <para>**这是本文件刻意保留的薄包装之一**（引擎不掌握本项目的字体档位，见文件顶部说明）。</para>
+        /// </summary>
+        private static int SnapFontSize(int size) => size < 16 ? 16 : (size / 16) * 16;
 
         /// <summary>
         /// 建一段文字。
@@ -196,40 +218,59 @@ namespace SuperMario.UI
             // 面板铺满、换分辨率、改布局都不会让整块版式跑掉。
             // 文字在框内怎么摆由 TextAnchor 决定（MiddleLeft 就是"从框左边开始写"），
             // 不需要再动锚点。HudPanel 那种要贴屏幕角落的，自己在建完之后覆写 anchor。
-            var rt = Node(parent, name, new Vector2(0.5f, 0.5f), anchorPos, boxSize);
-            var t = rt.gameObject.AddComponent<Text>();
+            // 文字节点由**引擎**建（`UIFactory.CreateText` 是引擎里唯一建 uGUI Text 的地方，
+            // 文字渲染挂钩 TextHooks 不会被绕过），本项目在这之上覆写三处"像素口径"：
+            //   ① 字体：换成 NES 像素字体（引擎默认是内置字体）；
+            //   ② 字号：吸附到 16 的整数倍（见 SnapFontSize）；
+            //   ③ 不换行（引擎默认 Wrap；本项目文案都是单行、且靠溢出显示）。
+            var t = UIFactory.CreateText(name, parent, content, SnapFontSize(size), anchor, color);
             if (Font != null) t.font = Font;
-            t.text = content;
-            // 像素字体要整数倍：把字号对齐到 16 的倍数（不足 16 的按 16 处理）。
-            t.fontSize = size < 16 ? 16 : (size / 16) * 16;
-            t.alignment = anchor;
-            t.color = color;
+            t.fontSize = SnapFontSize(size);
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-            t.raycastTarget = false;
+            // 旧实现（自己 AddComponent<Text>）走的是 Unity 默认值 true；这里显式写回，保持渲染口径不变。
+            t.supportRichText = true;
+            UIFactory.Place(t.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchorPos, boxSize);
             return t;
         }
 
-        /// <summary>建一个按钮（纯色底 + 居中文字）。</summary>
+        /// <summary>
+        /// 建一个按钮（纯色底 + 居中文字）。
+        /// <para>底板 / Button 组件 / 居中文字一次由引擎建好（<see cref="UIFactory.CreateButton"/>），
+        /// 本项目只覆盖三处以回到既有口径：定位锚点、悬停/按下的亮度差反馈、文字换像素字体与字号吸附。</para>
+        /// </summary>
         public static Button TextButton(Transform parent, string name, string content, int size,
                                         Vector2 anchor, Vector2 pos, Vector2 size2, Color bg, Color fg,
                                         System.Action onClick)
         {
-            var img = Block(parent, name, bg, anchor, pos, size2);
-            var btn = img.gameObject.AddComponent<Button>();
-            btn.targetGraphic = img;
+            var img = UIFactory.CreateButton(name, parent, content, size2, Vector2.zero, bg, onClick);
+            UIFactory.Place(img.rectTransform, anchor, new Vector2(0.5f, 0.5f), pos, size2);
 
-            var colors = btn.colors;
+            var btn = img.GetComponent<Button>();
             // 悬停/按下的反馈用亮度差表现：像素风不适合做缩放或渐变动画。
+            var colors = btn.colors;
             colors.normalColor = Color.white;
             colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
             colors.pressedColor = new Color(0.75f, 0.75f, 0.75f, 1f);
             btn.colors = colors;
 
-            Label(img.transform, "Text", content, size, TextAnchor.MiddleCenter,
-                Vector2.zero, size2, fg);
+            // 引擎建的文字（内置字体 / 26 号 / 浅色）必须换成本项目口径：像素字体 + 字号吸附。
+            // 节点改名 "Text" 只为与旧实现（自建的 Text 子节点同名）保持排障 / 取证口径一致。
+            var label = img.GetComponentInChildren<Text>(true);
+            if (label != null)
+            {
+                label.gameObject.name = "Text";
+                if (Font != null) label.font = Font;
+                label.fontSize = SnapFontSize(size);
+                label.color = fg;
+                label.horizontalOverflow = HorizontalWrapMode.Overflow;
+                label.supportRichText = true;
+            }
+            else
+            {
+                // 非预期分支（引擎改了 CreateButton 的层级就会走到）：按钮能点但没字，必须留痕。
+                Game.Logger.Warn("UI", $"TextButton({name}) 没有取到文字节点，按钮文字不会显示");
+            }
 
-            if (onClick != null) btn.onClick.AddListener(() => onClick());
             return btn;
         }
 

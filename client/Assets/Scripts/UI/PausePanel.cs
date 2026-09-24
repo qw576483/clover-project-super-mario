@@ -41,40 +41,60 @@ namespace SuperMario.UI
             BuildVolumeSlider(transform, "音效", SoundGroup.SFX, -250f);
         }
 
+        /// <summary>
+        /// 音量条尺寸（画布单位）。出处 = 旧实现里那条**轨道**的尺寸（420×12；
+        /// 外层 `Vol_{group}` 节点高 30 只是留白，可见的条一直是 12 高）。
+        /// </summary>
+        private static readonly Vector2 VolBarSize = new Vector2(420f, 12f);
+
+        /// <summary>轨道底色。出处 = 旧实现 `BG` 块的 <c>(0.25, 0.25, 0.25)</c>。</summary>
+        private static readonly Color VolTrackColor = new Color(0.25f, 0.25f, 0.25f);
+
+        /// <summary>手柄宽度（画布单位）= 轨道高度（12 ⇒ 方块手柄，像素风）。</summary>
+        private const float VolHandleWidth = 12f;
+
         private static void BuildVolumeSlider(Transform parent, string label, SoundGroup group, float y)
         {
-            var sliderGo = UIBuilder.Node(parent, $"Vol_{group}", new Vector2(0.5f, 0.5f),
-                new Vector2(0f, y), new Vector2(420f, 30f));
-            var slider = sliderGo.gameObject.AddComponent<Slider>();
-
-            var bg = UIBuilder.Block(sliderGo, "BG", new Color(0.25f, 0.25f, 0.25f),
-                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(420f, 12f));
-
-            // ★ Fill Area 这一层是 **uGUI Slider 的硬性结构要求**，不能省。
+            // ★ 控件本身调引擎 `UIFactory.CreateSlider`（`Runtime/Presentation/UIWidgetControls.cs`）。
+            // 本项目只保留两样**项目内容**：
+            //   ① 像素色板（轨道深灰 / 已填金色）与手柄宽度 —— 引擎刻意不含任何项目配色
+            //      （见该文件头「⛔ 没有下沉：配色 / 文案 / 字号档位都是业务取值」）；
+            //   ② "放在哪"—— 引擎的 CreateSlider 是**左上角锚点**定位（`CreateBoxRect`），
+            //      本项目所有控件都是"相对父层中心偏移"的口径，故建好后把整块的锚点/轴心改回中心
+            //      （只动这一个 rect，不动引擎内部搭好的 Fill / Handle 层级）。
             //
-            // 原理（`UnityEngine.UI.Slider.UpdateVisuals`）：滑块是按
-            // `fillRect.anchorMax[axis] = normalizedValue` 来表现"填充了多少"的；
-            // 而 anchorMax 是相对 **fillRect 的父节点**（Slider 里缓存成 `m_FillContainerRect`）解析的。
-            // 原先 `Fill` 直接挂在 sliderGo（420x30 的整块）下、锚点又写成 (0.5,0.5)、sizeDelta=420x12
-            // ⇒ ① 没有"和轨道同尺寸的容器"可供按比例收缩；② 锚点定死成 (0.5,0.5) 后
-            // anchorMax.x 被写进去也只是把它当"锚在中心"，宽度完全不变。
-            // 症状就是"两条音量条永远满格"（`pause.png` 可见），而代码零报错。
-            var area = UIBuilder.Node(sliderGo, "Fill Area", new Vector2(0.5f, 0.5f),
-                Vector2.zero, new Vector2(420f, 12f));
-            var fill = UIBuilder.Block(area, "Fill", UIBuilder.CoinGold,
-                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(420f, 12f));
-            var fillRt = fill.rectTransform;
-            fillRt.anchorMin = Vector2.zero;              // 与 Fill Area 同尺寸起步
-            fillRt.anchorMax = Vector2.one;               // Slide 每帧会改成 (value, 1)
-            fillRt.sizeDelta = Vector2.zero;              // 宽度完全由锚点决定
+            // ⛔ 不再自己搭"Fill Area / Fill"：uGUI Slider 的填充靠 `fillRect.anchorMax[axis]` 按比例
+            //    变化，而 anchorMax 是相对 fillRect 的**父节点**（Slider 缓存的 m_FillContainerRect）解析的
+            //    —— 旧实现就栽在这里（Fill 直接挂整块、锚点定死 (0.5,0.5) ⇒ 两条音量条永远满格，
+            //    `pause.png` 可见，而代码零报错）。引擎版只依赖公开属性 `fillRect` / `handleRect`。
+            //
+            // ⚠️ 节点名必须是 `Vol_{group}` 且是**本面板的直接子节点**：取证脚本
+            //    `tools/probes/probe.cs` 的 `SetVol` / `VolReport` 按 `panel.transform.Find("Vol_BGM")`
+            //    取它身上的 `Slider`（E-19「数值 ↔ 画面互相印证」）。改名或挪层 = 那条判据失效。
+            var handleColors = ColorBlock.defaultColorBlock;
+            handleColors.normalColor = Color.white;
+            handleColors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
+            handleColors.pressedColor = new Color(0.75f, 0.75f, 0.75f, 1f);
+            handleColors.selectedColor = Color.white;
+            handleColors.colorMultiplier = 1f;
+            handleColors.fadeDuration = 0.1f;
 
-            slider.targetGraphic = bg;
-            slider.fillRect = fillRt;
-            slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = 0f;
-            slider.maxValue = 1f;
-            slider.value = Game.Sound != null ? Game.Sound.GetVolume(group) : 1f;
-            slider.onValueChanged.AddListener(v => Game.Sound?.SetVolume(group, v));
+            var slider = UIFactory.CreateSlider(
+                $"Vol_{group}", parent, Vector2.zero, VolBarSize,
+                0f, 1f,
+                Game.Sound != null ? Game.Sound.GetVolume(group) : 1f,
+                v => Game.Sound?.SetVolume(group, v),
+                new WidgetSliderStyle
+                {
+                    TrackColor = VolTrackColor,
+                    FillColor = UIBuilder.CoinGold,
+                    HandleColor = UIBuilder.CoinGold,
+                    HandleColors = handleColors,
+                    HandleWidth = VolHandleWidth,
+                });
+
+            UIFactory.Place((RectTransform)slider.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, y), VolBarSize);
 
             // 标签放在滑杆【左侧之外】。
             // 踩过的坑：原先给 -260，但 Label 是"锚在父节点中心"的右对齐文案

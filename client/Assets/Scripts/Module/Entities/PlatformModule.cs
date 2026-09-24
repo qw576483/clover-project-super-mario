@@ -46,6 +46,71 @@ namespace SuperMario.Module.Entities
     /// 判据与 `OnBecameInvisible` 同义（可见 → 不可见那一刻销毁），另加一条 30 秒兜底防泄漏。
     /// </para>
     /// </summary>
+    /// <summary>
+    /// 升降台的**对象池接线**（引擎 `Game.Pool` 的"代码工厂"路径，见 <see cref="IObjectPool.Register"/>）。
+    /// <para>
+    /// 为什么这一件该入池：它是本项目里**唯一**的"高频短命物" —— 每 1.5 秒生成一台、离屏即销毁
+    /// （原版 `DestroyOutOfScreen`），一局里几十上百次 <c>new GameObject</c> + <c>AddComponent</c>。
+    /// 引擎 G5 要求"战斗内对象一律走对象池"；工厂路径正是为"代码造出来的对象"准备的
+    /// （没有它时池只会去 <c>Resources.Load</c> 找预制体）。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>名字要在"在场 / 入池"两态之间切换</b>：取证脚本 <c>tools/probes/probe.cs</c> 的
+    /// <c>AllByName("MovingPlatform")</c> 是**包含非活跃对象**的全场景查找，而 <c>CountPlatforms()</c>
+    /// 判的是"场上活着的平台个数"。池里的对象位置被归一化到原点（y=0 > −50），不改名就会被算进去。
+    /// ⇒ 入池前改名 <see cref="InactiveName"/>、取出时改回 <see cref="Key"/>。
+    /// </para>
+    /// </summary>
+    internal static class MovingPlatformPool
+    {
+        /// <summary>池键 = 对象名（引擎 <c>Spawn</c> 会把自己造的对象按 key 命名）。</summary>
+        public const string Key = "MovingPlatform";
+
+        /// <summary>被回收（非活跃）时的对象名 —— 与"场上活着的"区分开，见类注释。</summary>
+        public const string InactiveName = "MovingPlatform@pooled";
+
+        /// <summary>工厂是否已注册（引擎语义：`Clear` / `ClearAll` 不注销工厂 ⇒ 注册一次即可）。</summary>
+        private static bool _registered;
+
+        /// <summary>取一台升降台：优先复用池里的，池空则用工厂现造。</summary>
+        public static Platform Spawn(Transform parent)
+        {
+            if (Game.Pool == null)
+            {
+                // 引擎没起（编辑器里直接点开某个场景/单测）：退回现造，不静默少一台平台。
+                var raw = new GameObject(Key);
+                raw.transform.SetParent(parent, false);
+                return raw.AddComponent<Platform>();
+            }
+
+            if (!_registered)
+            {
+                _registered = true;
+                // 工厂**只在池里没有可复用对象时**被调用（引擎语义 ①）；造一个空壳，状态由 Init 灌。
+                Game.Pool.Register(Key, () => new GameObject(Key, typeof(Platform)));
+            }
+
+            var go = Game.Pool.Spawn(Key, parent);
+            if (go == null) return null;     // 造不出（引擎已记 Error）：本周期不生成，⛔ 不产出空壳
+            go.name = Key;                   // 复用的对象可能带着 InactiveName 回来，改回"在场"名
+            return go.GetComponent<Platform>();
+        }
+
+        /// <summary>归还一台升降台（对象仍在池里，只是非活跃）。</summary>
+        public static void Despawn(Platform platform)
+        {
+            if (platform == null) return;
+            if (Game.Pool == null)
+            {
+                // 引擎已经 Shutdown（池没了）：直接销毁，别把对象留在场景里。
+                UnityEngine.Object.Destroy(platform.gameObject);
+                return;
+            }
+            platform.gameObject.name = InactiveName;
+            Game.Pool.Despawn(platform.gameObject);
+        }
+    }
+
     internal sealed class MovingPlatformModule : IMovingPlatforms
     {
         private readonly ILevel _level;
@@ -120,10 +185,13 @@ namespace SuperMario.Module.Entities
             if (dt <= 0f) return;
             if (dt > 0.05f) dt = 0.05f;
 
-            // 已经被销毁的平台（离屏）先从名单里摘掉。
+            // 已经不在场的平台先从名单里摘掉：可能是被销毁的（伪 null），
+            // 也可能是**被回收进对象池**的（对象还在、只是 SetActive(false)）——
+            // 后者不是 null，不认它就会留在表里、被 `Clear()` 二次归还（引擎会报"重复归还"）。
             for (var i = _live.Count - 1; i >= 0; i--)
             {
-                if (_live[i] == null) _live.RemoveAt(i);
+                var live = _live[i];
+                if (live == null || !live.gameObject.activeSelf) _live.RemoveAt(i);
             }
 
             var px = StageContext.Player != null ? StageContext.Player.FeetPosition.x : float.MaxValue;
@@ -145,9 +213,10 @@ namespace SuperMario.Module.Entities
             if (_timer > 0f) return;
             _timer = WaitBetweenSpawn;
 
-            var go = new GameObject("MovingPlatform");
-            go.transform.SetParent(transform.parent, false);
-            var p = go.AddComponent<Platform>();
+            // ★ 走引擎对象池（`Game.Pool` + 代码工厂，见 `MovingPlatformPool` 的说明）：
+            //   升降台是"高频短命物"（每 1.5 秒一台、离屏即销毁），正属 G5 要求入池的那一类。
+            var p = MovingPlatformPool.Spawn(transform.parent);
+            if (p == null) return;      // 池造不出（引擎已记 Error）⇒ 本周期不生成，⛔ 不静默产出空对象
             p.Init(_level, _spawnPos, _downStopY, _upStopY, _dir);
             _live.Add(p);
             Game.Logger.Info("Platform",
@@ -222,6 +291,12 @@ namespace SuperMario.Module.Entities
         private float _age;
         private bool _wasVisible;
 
+        /// <summary>Art 子节点是否已经建过（对象池复用的对象上已经有它了，见 <see cref="Init"/>）。</summary>
+        private bool _built;
+
+        /// <summary>是否已经归还给对象池（防"离屏回收 + `Spawner.Clear`"两条路径重复归还）。</summary>
+        private bool _released;
+
         /// <summary>已经把台面登记成实心格的格（x, y）—— 离开时按这张表注销。</summary>
         private readonly List<Vector2Int> _cells = new List<Vector2Int>();
         /// <summary>与 <see cref="_cells"/> 一一对应：这一格**原本就是实心**（地形）⇒ 注销时不能把它删掉。</summary>
@@ -229,31 +304,47 @@ namespace SuperMario.Module.Entities
 
         public void Init(ILevel level, Vector2 spawnPos, float downStopY, float upStopY, int startDir)
         {
+            // ★ 本对象可能是从对象池**复用**回来的（引擎 `Game.Pool`，见 `MovingPlatformPool`）：
+            //   所有运行时状态必须在这里复位。漏一项就会把上一台的残留带进这一台 ——
+            //   例如 `_wasVisible` 漏清 ⇒ 新台子还没进过画面就被判"可见过 → 现在不可见"而立刻回收。
             _level = level;
             _y = spawnPos.y;
             transform.position = new Vector3(spawnPos.x, _y, 0f);
+            gameObject.name = MovingPlatformPool.Key;   // 池里的对象带着 InactiveName，取出时改回"在场"名
 
             _downStopY = downStopY;
             _upStopY = upStopY;
             _dir = startDir >= 0 ? 1 : -1;
+            _wait = 0f;
+            _age = 0f;
+            _wasVisible = false;
+            _released = false;
 
             // 台面贴图（3 格宽 × 半格厚）。prefab 的精灵 pivot 是【居中】，本工程 `Sprites/Platform/`
             // 走 `SpriteImportPostprocessor` 的"居中轴心"一档，所以直接挂在台面中心即可。
-            var art = new GameObject("Art").transform;
-            art.SetParent(transform, false);
-            art.localPosition = Vector3.zero;
-            _sr = art.gameObject.AddComponent<SpriteRenderer>();
-            _sr.sortingOrder = 2;
-            Game.Res.LoadAsset<Sprite>(ResPaths.Platform(SpriteNames.MovingPlatform), s =>
+            // ⚠️ Art 子节点**只建一次**：复用的对象上已经有它，每次 Init 都建会越挂越多。
+            if (!_built)
             {
-                if (s == null)
+                _built = true;
+                var art = new GameObject("Art").transform;
+                art.SetParent(transform, false);
+                art.localPosition = Vector3.zero;
+                _sr = art.gameObject.AddComponent<SpriteRenderer>();
+                _sr.sortingOrder = 2;
+                Game.Res.LoadAsset<Sprite>(ResPaths.Platform(SpriteNames.MovingPlatform), s =>
                 {
-                    Game.Logger.Error("Platform",
-                        $"升降台台面贴图加载失败：{ResPaths.Platform(SpriteNames.MovingPlatform)}");
-                    return;
-                }
-                _sr.sprite = s;
-            });
+                    if (s == null)
+                    {
+                        Game.Logger.Error("Platform",
+                            $"升降台台面贴图加载失败：{ResPaths.Platform(SpriteNames.MovingPlatform)}");
+                        return;
+                    }
+                    // 回调是异步的：期间这台可能已被回收、甚至随引擎 Shutdown 被销毁（入池后生命周期变长，
+                    // 这个窗口比原来更宽）⇒ 写之前判一次。
+                    if (_sr == null) return;
+                    _sr.sprite = s;
+                });
+            }
 
             RegisterCells();
             Game.Logger.Info("Platform",
@@ -348,7 +439,9 @@ namespace SuperMario.Module.Entities
         /// </summary>
         private bool OnGameCamera()
         {
-            var cam = Camera.main;
+            // 走引擎相机门面（与 `CameraModule` 取的是**同一台** —— 它驱动的那台就是引擎 rig 的那台）；
+            // 未就绪时 `Main` 返回 null（引擎侧已限频留痕）⇒ 判空后按"不敢销毁"处理。
+            var cam = Game.Camera != null ? Game.Camera.Main : null;
             if (cam == null) return true;      // 没有相机 ⇒ 不敢销毁（宁可留着）
             var halfH = cam.orthographicSize;
             var halfW = halfH * cam.aspect;
@@ -370,6 +463,11 @@ namespace SuperMario.Module.Entities
 
         public void Clear()
         {
+            // 两条回收路径（离屏 / `Spawner.Clear`）都可能调到：已归还过就直接返回 ——
+            // 重复 `Despawn` 会被引擎记一条"对象被重复归还"的告警，而且第二次的注销代码是对空表走的。
+            if (_released) return;
+            _released = true;
+
             if (_level != null)
             {
                 for (var i = 0; i < _cells.Count; i++)
@@ -381,7 +479,11 @@ namespace SuperMario.Module.Entities
             }
             _cells.Clear();
             _cellsPreexisting.Clear();
-            if (this != null && gameObject != null) Destroy(gameObject);
+
+            // ★ 归还引擎对象池（不是 Destroy）：对象留着下次复用，位置由池归一化到原点。
+            //   ⛔ 归还之前必须已经注销上面那批实心格 —— 池里的对象不是"场上活着的平台"，
+            //      带着实心格回去会让它在场外继续挡人。
+            MovingPlatformPool.Despawn(this);
         }
     }
 }

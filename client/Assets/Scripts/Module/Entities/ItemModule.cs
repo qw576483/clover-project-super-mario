@@ -311,17 +311,25 @@ namespace SuperMario.Module.Entities
         internal sealed class StaticCoin : Item
         {
             private static readonly Vector2 Size = new Vector2(0.7f, 0.7f);
-            private readonly List<Sprite> _frames = new List<Sprite>();
-            private float _animTimer;
-            private int _frame;
+
+            /// <summary>金币 0.11 s/帧。**逐字沿用**原手写节奏（`_animTimer >= 0.11f` 那个常量）。</summary>
+            private const float FrameSeconds = 0.11f;
+
+            /// <summary>
+            /// 逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）：帧表 + fps 给一次，切帧只有引擎那一份实现。
+            /// 收敛掉本处自写的 `_frames` / `_animTimer` / `_frame` / `Sr.sprite = …` 四件套。
+            /// </summary>
+            private SpriteFrameAnimator _anim;
 
             public void Init(Vector2 center, List<Sprite> frames, SpriteRenderer sr)
             {
                 Content = BlockContent.Coin;
                 Sr = sr;
                 Sr.sortingOrder = 3;                 // 在砖块之下、背景之上
-                _frames.AddRange(frames);
-                if (_frames.Count > 0) Sr.sprite = _frames[0];
+                _anim = new SpriteFrameAnimator(sr);
+                // 空帧表由引擎自己降频 Warn（"Sprite 还没加载完 / 图集路径不对"），本处不再自己判空。
+                // 单帧也照给：引擎在单帧上循环 = 恒显第 0 帧，与原 `Count <= 1` 的早退等价。
+                _anim.Play(frames.ToArray(), 1f / FrameSeconds);
 
                 transform.position = new Vector3(center.x, center.y, 0f);
                 TargetPos = transform.position;
@@ -335,13 +343,7 @@ namespace SuperMario.Module.Entities
             private void Update()
             {
                 if (Taken || Finished) return;
-                if (_frames.Count <= 1) return;
-
-                _animTimer += Time.deltaTime;
-                if (_animTimer < 0.11f) return;
-                _animTimer = 0f;
-                _frame = (_frame + 1) % _frames.Count;
-                Sr.sprite = _frames[_frame];
+                _anim?.Advance(Time.deltaTime);
             }
 
             public override void Collect()
@@ -352,16 +354,55 @@ namespace SuperMario.Module.Entities
             }
         }
 
-        /// <summary>遍历矩形覆盖到的整数格（道具的碰撞都用"格子是否实心"判定）。</summary>
-        protected static IEnumerable<Vector2Int> Overlap(Rect r)
+        // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
+        //
+        // 原先这里有一个私有迭代器 `Overlap`（`yield return new Vector2Int(x,y)`）。它与
+        // PlayerActor / FireballModule / EnemyModule 三处**逐字相同** ⇒ 已下沉为
+        // `CloverEngine.GridUtil`（出处与逐字复刻的口径见 `Runtime/Core/GridUtil.cs` 文件头：
+        // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
+        // 那个 `- 0.0001f` 收边量即 `GridUtil.EdgeEpsilon`）。
+        //
+        // ⛔ 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器、每次调用都分配，
+        //    而道具的 X/Y 解算是**每帧每只道具**都跑的热路径。`ForEach` 只在"委托已缓存"时不分配
+        //    —— 引擎文件头 ★ GC 写明「方法组写法在 Unity 的 C# 9 下每次转换也分配一个委托」
+        //    ⇒ 委托存进 <see cref="_onScanTile"/>，状态存字段（回调不捕获局部变量）。
+        //
+        // ⛔ 算法本身一字未动：仍是"X 先走完解 X、再走 Y 解 Y"、仍是"命中第一格就停"。
+
+        /// <summary>缓存的逐格回调（热路径不分配，见上）。</summary>
+        private Action<int, int> _onScanTile;
+
+        private ILevel _scanLevel;
+        private bool _scanHit;
+
+        /// <summary>本次扫描命中的格（<see cref="ScanFirstSolid"/> 返回 <c>true</c> 时有效）。</summary>
+        protected int HitTileX { get; private set; }
+        protected int HitTileY { get; private set; }
+
+        /// <summary>
+        /// 扫矩形覆盖到的整数格，**命中第一个实心格就停**（逐字等价原来的 `foreach` + `Overlap` + `break`：
+        /// 遍历顺序由引擎 <see cref="GridUtil.ForEach"/> 保证 = y 升序 / x 升序，与旧迭代器相同）。
+        /// </summary>
+        /// <returns><c>true</c> = 命中了一个实心格（格坐标见 <see cref="HitTileX"/> / <see cref="HitTileY"/>）。</returns>
+        protected bool ScanFirstSolid(ILevel level, Rect r)
         {
-            var x0 = Mathf.FloorToInt(r.xMin);
-            var x1 = Mathf.FloorToInt(r.xMax - 0.0001f);
-            var y0 = Mathf.FloorToInt(r.yMin);
-            var y1 = Mathf.FloorToInt(r.yMax - 0.0001f);
-            for (var y = y0; y <= y1; y++)
-                for (var x = x0; x <= x1; x++)
-                    yield return new Vector2Int(x, y);
+            _scanLevel = level;
+            _scanHit = false;
+            HitTileX = 0;
+            HitTileY = 0;
+            _onScanTile ??= OnScanTile;               // 委托缓存到字段（引擎 GridUtil 文件头 ★ GC 的要求）
+            GridUtil.ForEach(r, _onScanTile);
+            return _scanHit;
+        }
+
+        /// <summary>逐格回调：命中即停（<see cref="_scanHit"/> 复刻原来的 <c>break</c>）。</summary>
+        private void OnScanTile(int tx, int ty)
+        {
+            if (_scanHit) return;                      // = 原 `break`
+            if (!_scanLevel.IsSolidTile(tx, ty)) return;
+            _scanHit = true;
+            HitTileX = tx;
+            HitTileY = ty;
         }
 
         public abstract void Collect();
@@ -423,21 +464,17 @@ namespace SuperMario.Module.Entities
 
             var dx = _dir * 2.5f * dt;
             var nx = transform.position.x + dx;
-            foreach (var c in Overlap(new Rect(nx - Size.x * 0.5f, transform.position.y, Size.x, Size.y)))
+            if (ScanFirstSolid(_level, new Rect(nx - Size.x * 0.5f, transform.position.y, Size.x, Size.y)))
             {
-                if (!_level.IsSolidTile(c.x, c.y)) continue;
                 _dir = -_dir;
                 nx = transform.position.x;
-                break;
             }
 
             var ny = transform.position.y + _vel.y * dt;
-            foreach (var c in Overlap(new Rect(nx - Size.x * 0.5f, ny, Size.x, Size.y)))
+            if (ScanFirstSolid(_level, new Rect(nx - Size.x * 0.5f, ny, Size.x, Size.y)))
             {
-                if (!_level.IsSolidTile(c.x, c.y)) continue;
-                if (_vel.y <= 0f) { ny = c.y + 1f; _vel.y = 0f; }
-                else { ny = c.y - Size.y; _vel.y = 0f; }
-                break;
+                if (_vel.y <= 0f) { ny = HitTileY + 1f; _vel.y = 0f; }
+                else { ny = HitTileY - Size.y; _vel.y = 0f; }
             }
 
             transform.position = new Vector3(nx, ny, 0f);
@@ -464,13 +501,16 @@ namespace SuperMario.Module.Entities
     {
         private static readonly Vector2 Size = new Vector2(0.9f, 0.9f);
 
+        /// <summary>星星颜色循环 0.09 s/帧。**逐字沿用**原手写节奏（`_animTimer >= 0.09f`）。</summary>
+        private const float FrameSeconds = 0.09f;
+
         private ILevel _level;
         private IAudio _audio;
-        private readonly List<Sprite> _frames = new List<Sprite>();
         private Vector2 _vel;
         private float _dir = 1f;
-        private float _animTimer;
-        private int _frame;
+
+        /// <summary>逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）—— 收敛掉自写的 `_frames`/`_animTimer`/`_frame`。</summary>
+        private SpriteFrameAnimator _anim;
 
         public void Init(ILevel level, IAudio audio, Vector2 feetPos, List<Sprite> frames, SpriteRenderer sr)
         {
@@ -478,8 +518,8 @@ namespace SuperMario.Module.Entities
             _audio = audio;
             Content = BlockContent.Star;
             Sr = sr;
-            _frames.AddRange(frames);
-            if (_frames.Count > 0) Sr.sprite = _frames[0];
+            _anim = new SpriteFrameAnimator(sr);
+            _anim.Play(frames.ToArray(), 1f / FrameSeconds);
 
             transform.position = new Vector3(feetPos.x, feetPos.y - GameConst.TileSize, 0f);
             TargetPos = new Vector3(feetPos.x, feetPos.y, 0f);
@@ -504,41 +544,28 @@ namespace SuperMario.Module.Entities
             }
 
             // 颜色循环：原版的星星会闪不同颜色（贴图本身就是四帧不同配色）。
-            if (_frames.Count > 1)
-            {
-                _animTimer += dt;
-                if (_animTimer >= 0.09f)
-                {
-                    _animTimer = 0f;
-                    _frame = (_frame + 1) % _frames.Count;
-                    Sr.sprite = _frames[_frame];
-                }
-            }
+            _anim?.Advance(dt);
 
             _vel.y -= GameConst.Gravity * dt;
             if (_vel.y < -GameConst.MaxFallSpeed) _vel.y = -GameConst.MaxFallSpeed;
 
             var dx = _dir * 3f * dt;
             var nx = transform.position.x + dx;
-            foreach (var c in Overlap(new Rect(nx - Size.x * 0.5f, transform.position.y, Size.x, Size.y)))
+            if (ScanFirstSolid(_level, new Rect(nx - Size.x * 0.5f, transform.position.y, Size.x, Size.y)))
             {
-                if (!_level.IsSolidTile(c.x, c.y)) continue;
                 _dir = -_dir;
                 nx = transform.position.x;
-                break;
             }
 
             var ny = transform.position.y + _vel.y * dt;
-            foreach (var c in Overlap(new Rect(nx - Size.x * 0.5f, ny, Size.x, Size.y)))
+            if (ScanFirstSolid(_level, new Rect(nx - Size.x * 0.5f, ny, Size.x, Size.y)))
             {
-                if (!_level.IsSolidTile(c.x, c.y)) continue;
                 if (_vel.y <= 0f)
                 {
-                    ny = c.y + 1f;
+                    ny = HitTileY + 1f;
                     _vel.y = GameConst.StarBounce;   // 落地即弹起
                 }
-                else { ny = c.y - Size.y; _vel.y = 0f; }
-                break;
+                else { ny = HitTileY - Size.y; _vel.y = 0f; }
             }
 
             transform.position = new Vector3(nx, ny, 0f);
@@ -560,18 +587,22 @@ namespace SuperMario.Module.Entities
     internal sealed class FlowerItem : Item
     {
         private static readonly Vector2 Size = new Vector2(0.9f, 0.9f);
+
+        /// <summary>火焰花循环 0.08 s/帧。**逐字沿用**原手写节奏（`_animTimer >= 0.08f`）。</summary>
+        private const float FrameSeconds = 0.08f;
+
         private IAudio _audio;
-        private readonly List<Sprite> _frames = new List<Sprite>();
-        private float _animTimer;
-        private int _frame;
+
+        /// <summary>逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）—— 收敛掉自写的 `_frames`/`_animTimer`/`_frame`。</summary>
+        private SpriteFrameAnimator _anim;
 
         public void Init(IAudio audio, Vector2 feetPos, List<Sprite> frames, SpriteRenderer sr)
         {
             _audio = audio;
             Content = BlockContent.FireFlower;
             Sr = sr;
-            _frames.AddRange(frames);
-            if (_frames.Count > 0) Sr.sprite = _frames[0];
+            _anim = new SpriteFrameAnimator(sr);
+            _anim.Play(frames.ToArray(), 1f / FrameSeconds);
 
             transform.position = new Vector3(feetPos.x, feetPos.y - GameConst.TileSize, 0f);
             TargetPos = new Vector3(feetPos.x, feetPos.y, 0f);
@@ -594,16 +625,7 @@ namespace SuperMario.Module.Entities
                 return;
             }
 
-            if (_frames.Count > 1)
-            {
-                _animTimer += dt;
-                if (_animTimer >= 0.08f)
-                {
-                    _animTimer = 0f;
-                    _frame = (_frame + 1) % _frames.Count;
-                    Sr.sprite = _frames[_frame];
-                }
-            }
+            _anim?.Advance(dt);
         }
 
         public override void Collect()
@@ -619,20 +641,24 @@ namespace SuperMario.Module.Entities
     internal sealed class CoinPop : Item
     {
         private static readonly Vector2 Size = new Vector2(0.6f, 0.9f);
+
+        /// <summary>弹出金币旋转 0.06 s/帧。**逐字沿用**原手写节奏（`_animTimer >= 0.06f`）。</summary>
+        private const float FrameSeconds = 0.06f;
+
         private IAudio _audio;
-        private readonly List<Sprite> _frames = new List<Sprite>();
         private Vector2 _vel;
-        private float _animTimer;
-        private int _frame;
         private float _life = 1.2f;
+
+        /// <summary>逐帧动画器（引擎 <see cref="SpriteFrameAnimator"/>）—— 收敛掉自写的 `_frames`/`_animTimer`/`_frame`。</summary>
+        private SpriteFrameAnimator _anim;
 
         public void Init(IAudio audio, Vector2 feetPos, List<Sprite> frames, SpriteRenderer sr)
         {
             _audio = audio;
             Content = BlockContent.Coin;
             Sr = sr;
-            _frames.AddRange(frames);
-            if (_frames.Count > 0) Sr.sprite = _frames[0];
+            _anim = new SpriteFrameAnimator(sr);
+            _anim.Play(frames.ToArray(), 1f / FrameSeconds);
 
             transform.position = new Vector3(feetPos.x, feetPos.y, 0f);
             _vel = new Vector2(0f, 11f);
@@ -653,16 +679,7 @@ namespace SuperMario.Module.Entities
             transform.position += new Vector3(0f, _vel.y * dt, 0f);
             RecomputeBounds(Size);
 
-            if (_frames.Count > 1)
-            {
-                _animTimer += dt;
-                if (_animTimer >= 0.06f)
-                {
-                    _animTimer = 0f;
-                    _frame = (_frame + 1) % _frames.Count;
-                    Sr.sprite = _frames[_frame];
-                }
-            }
+            _anim?.Advance(dt);
         }
 
         public override void Collect() { }

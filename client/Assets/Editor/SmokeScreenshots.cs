@@ -13,6 +13,10 @@ namespace SuperMario.EditorTools
     /// <summary>
     /// 冒烟自审（**手动触发**）：在编辑器里点菜单跑一遍并截图。
     /// <para>
+    /// ⚠️ <b>已被 <c>scripts/play-driver.ps1</c> 取代</b>（那条链才是自动化入口，能带参数、能收日志）；
+    /// 本菜单项**保留**只为"手上没有脚本时也能人肉跑一遍"这个兜底场景。
+    /// </para>
+    /// <para>
     /// 为什么是手动而不是批处理：项目在 <c>-batchmode</c> 下跑完 <c>-executeMethod</c> 就立即退出，
     /// 不会进入播放模式，所以这条路径只能从 GUI 菜单用。
     /// <b>自动化验证走 <c>Assets/Tests/PlayMode/SmokeTests.cs</c></b>（unity test 会正确驱动播放模式）。
@@ -20,10 +24,16 @@ namespace SuperMario.EditorTools
     /// <para>
     /// 轮询状态推进而不是等固定秒数：加载耗时随机器变化，按秒截会得到一堆空图。
     /// </para>
+    /// <para>
+    /// ⛔ <b>截图目录已移出工程树</b>：输出到 <c>&lt;项目根&gt;/.ai-tmp/screenshots</c>
+    /// （见 <see cref="SuperMario.Core.EvidencePaths"/>，可用环境变量 <c>SMB_SHOT_DIR</c> 覆盖）。
+    /// 原先是工程内的 <c>_smb_work/shots</c> —— 跑一次就在工程树里留一堆 png（证据落进 <c>Assets/</c> 是违规产物）。
+    /// </para>
     /// </summary>
     public static class SmokeScreenshots
     {
-        private const string OutDir = "_smb_work/shots";
+        /// <summary>截图输出目录（**绝对路径**，在工程树之外）。</summary>
+        private static string OutDir => EvidencePaths.ShotDir;
 
         private static int _step;
         private static float _phaseEntered;
@@ -106,17 +116,14 @@ namespace SuperMario.EditorTools
 
         private static void Shot(string name)
         {
-            // 同 SmokeTests：避开未引入的 ScreenCaptureModule，走 ReadPixels + EncodeToPNG。
-            var w = Screen.width;
-            var h = Screen.height;
-            if (w <= 0 || h <= 0) return;
-
-            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
-            tex.ReadPixels(new Rect(0f, 0f, w, h), 0, 0);
-            tex.Apply();
-            File.WriteAllBytes($"{OutDir}/{name}.png", tex.EncodeToPNG());
-            UnityEngine.Object.DestroyImmediate(tex);
-            Debug.Log($"[Smoke] 截图 {name}（{w}x{h}）");
+            // 收敛到引擎 `CloverEngine.Screenshot.CaptureToFile`（原来是手写
+            // `Texture2D` + `ReadPixels` + `EncodeToPNG` + `DestroyImmediate` —— 与 SmokeTests 里那份逐字重复）。
+            // 引擎版负责：目录不存在时递归创建、屏幕尺寸非法 / 编码失败时**返回 false + Error 留痕**
+            // （手写版这几条失败分支全是静默的），并在 finally 里销毁临时纹理。
+            // 调用时机未变：仍在 `EditorApplication.update` 这一拍里同帧读屏。
+            var path = EvidencePaths.Shot(name);
+            if (!Screenshot.CaptureToFile(path))
+                Debug.LogWarning($"[Smoke] 截图 {name} 失败（详见 [Error] Screenshot 那一行）：{path}");
         }
 
         private static void Fail(string reason)

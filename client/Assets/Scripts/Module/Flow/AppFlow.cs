@@ -417,10 +417,16 @@ namespace SuperMario.Module.Flow
             else
                 Game.UI.Open<LoadingPanel>(_slots[_currentPlayer].Lives);
 
-            // 看门狗（**真实时间**）：上面把 timeScale 冻住了，于是 `LevelProps` 里那个
-            // `Timer.After(5f, …)` 的"装饰加载超时"在卡期间不会触发 —— 少了它，"资源路径写错"
-            // 就会退化成"黑底读条屏永不消失、一条日志都没有"（那正是它当初被写出来的原因）。
-            // 这里补一个 unscaled 版兜住**整段 Loading**（地形 / 实体 / 玩家 / 装饰全都算）。
+            // 看门狗（**真实时间**）：兜住**整段 Loading**（地形 / 实体 / 玩家 / 装饰全都算）。
+            //
+            // ★ 判据已按引擎契约修正（2026-09-24）：**判"回调真的没来"，不判"路径不存在"**。
+            //   旧注释写的是"`LevelProps` 那个 5 秒看门狗在卡期间不会触发" —— 那个 5 秒看门狗
+            //   本身就建立在错前提上（"路径不存在时引擎不会回调"），已删除（见 `LevelProps.Build` 的说明）。
+            //   引擎契约：`LoadAsset` **失败也会回调 null**（`Runtime/Core/Contracts.cs:1033/1042`；
+            //   实现 `Runtime/Resource/ResourceManager.cs:305-343` + `ResourceBackend.cs:233-259`）
+            //   ⇒ 资源缺失一律由回调里的 `sp == null` 报 Error；**本看门狗只负责引擎级故障**
+            //   （回调真的没到，例如加载在途被卡死）：它的判据是"`fsm` 仍是 Loading **且**
+            //   token 未变"，也就是"确实还有回调没来"，与"路径写不写错"无关。
             Game.Timer.AfterUnscaled(LoadingWatchdogSeconds, () =>
             {
                 // ★ 看门狗必须绑定"**这一次** Loading"。它是一次性定时器，12 秒后一定会响，
@@ -434,7 +440,8 @@ namespace SuperMario.Module.Flow
                 if (Game.Fsm.Current != FlowState.Loading) return;
                 Game.Logger.Error("Flow",
                     $"入场卡停留超过 {LoadingWatchdogSeconds} 秒仍未进关（fsm=Loading）：" +
-                    "多半是某个资源加载的回调没来（路径写错时引擎不会回调）—— 检查 ResPaths / SpriteNames");
+                    "说明某个加载回调**真的没到**（引擎契约是失败也会回调 null，见本方法上方注释）—— " +
+                    "先看有没有并列的 `加载失败：<path>` 一行；只有本行而没有那一行，才是加载在途被卡死");
             });
 
             _session = new StageSession();

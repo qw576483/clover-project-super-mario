@@ -38,25 +38,19 @@ namespace SuperMario.UI
             // ⚠️ 必须**锚到底边**，不能只写一个固定的负 y（这里原来写的就是 y=-500）：
             // 面板的"半高"是 CanvasScaler 按当前画面比例算出来的，不是恒定的 540 ——
             // 实测 1096x500 的 Game 视图下画布半高只有约 486，y=-500 直接被推出屏幕外，
-            // 截图里根本看不到这一行（第一次就是这么漏掉的）。锚到 (0.5, 0) 后，
-            // 无论什么比例它都稳定贴在底边之上 16 像素。
+            // 截图里根本看不到这一行（第一次就是这么漏掉的）。
+            // ⇒ 贴底这一段现在由引擎的 `UIFactory.CreateCreditLabel` 负责（它把底部锚点钉死），
+            //   本项目只经 `UIBuilder.CreditLabel` 给颜色与字体；三段式（本面板 / 标题屏）共用那一个入口。
             //
             // 注：这里原先那行 "CLOVER ENGINE  .  UNITY" 已删 —— §1.6 规定引擎自称必须**逐字**
             // 是 `clover-engine`（全大写只允许用于常量/环境变量），大写 + 空格的形式不合规，
             // 且留着会出现两个引擎自称。
             //
-            // ⚠️ 字体必须走 `UIBuilder.CreditLabel`（**不是** `Label`）：本工程统一的 NES 像素字体
-            // 里 a-z 与 A-Z 是**同一套字形** ⇒ 源码文本明明是 `by clover-engine`，画面上却是
-            // `BY CLOVER-ENGINE`（用户肉眼发现的缺陷）。§1.6 的判据是"渲染出来的字逐字对"
-            // ⇒ 这一行必须用一份真有小写字形的字体（出处见 `Core.ResPaths.CreditFont`）。
-            var sig = UIBuilder.CreditLabel(transform, "Signature", UIBuilder.CreditText,
-                16, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(800f, 32f),
-                Color.white);
-            var sigRt = sig.rectTransform;
-            sigRt.anchorMin = new Vector2(0.5f, 0f);
-            sigRt.anchorMax = new Vector2(0.5f, 0f);
-            sigRt.pivot = new Vector2(0.5f, 0f);
-            sigRt.anchoredPosition = new Vector2(0f, 16f);
+            // ⚠️ 字体必须真有小写字形（**不是**本项目的 NES 像素字体）：那份像素字体里 a-z 与 A-Z
+            // 是**同一套字形** ⇒ 源码文本明明是 `by clover-engine`，画面上却是 `BY CLOVER-ENGINE`
+            // （用户肉眼发现的缺陷）。§1.6 的判据是"渲染出来的字逐字对"⇒ 字体由
+            // `UIBuilder.CreditLabel` 统一取（出处见 `Core.ResPaths.CreditFont`）。
+            UIBuilder.CreditLabel(transform, Color.white);
         }
     }
 }

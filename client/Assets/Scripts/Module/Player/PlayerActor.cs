@@ -819,20 +819,15 @@ namespace SuperMario.Module.Player
             {
                 var newX = p.x + dx;
                 var rect = new Rect(newX - _size.x * 0.5f, p.y, _size.x, _size.y);
-                var hit = false;
-                foreach (var cell in Overlap(rect))
-                {
-                    if (!_level.IsSolidTile(cell.x, cell.y)) continue;
-                    // ★ 移动平台格【不挡横移】：台面只有半格厚，原版里人是从侧面走进/跳上去的，
-                    //   不是被一堵隐形墙拦住（那一格只是"格子里有台面"的近似登记，见 `Platform.RegisterCells`）。
-                    //   用户 2026-09-19 实测症状：「跳不上去移动的平台」—— 根因就是这里把整格当墙。
-                    if (_level.TryGetCarrierTop(cell.x, cell.y, out _)) continue;
-                    newX = _vel.x > 0f ? cell.x - _size.x * 0.5f : cell.x + 1f + _size.x * 0.5f;
-                    hit = true;
-                    break;   // 一帧内只解一次：速度已被 MaxFallSpeed/走速 限制，不会连撞两格
-                }
-                if (hit) _vel.x = 0f;
-                p.x = newX;
+                // 逐格枚举收敛到引擎 GridUtil.ForEach（委托缓存到字段 ⇒ 热路径零分配，
+                // 见 Runtime/Core/GridUtil.cs 文件头 ★ GC）。算法一字未动：仍是
+                // "命中第一格就停（_xHit 复刻原 break）+ 移动平台格不挡横移"，见 OnScanX。
+                _xNewX = newX;
+                _xHit = false;
+                _onScanX ??= OnScanX;                // 委托缓存到字段（引擎 GridUtil 文件头 ★ GC 的要求）
+                GridUtil.ForEach(rect, _onScanX);
+                if (_xHit) _vel.x = 0f;
+                p.x = _xNewX;
             }
 
             // ---- 左边界 ----
@@ -860,57 +855,18 @@ namespace SuperMario.Module.Player
                 var prevHead = p.y + _size.y;
                 var newY = p.y + dy;
                 var rect = new Rect(p.x - _size.x * 0.5f, newY, _size.x, _size.y);
-                var best = float.NaN;
-                var bestCell = Vector2Int.zero;
-                var anyOverlap = false;
 
-                foreach (var cell in Overlap(rect))
-                {
-                    if (!_level.IsSolidTile(cell.x, cell.y)) continue;
-                    anyOverlap = true;
+                // 扫描状态放字段（委托缓存到字段 ⇒ 这段热路径零分配）；口径与原 foreach 逐字一致：
+                // 顺序仍是 y 升序 / x 升序，`best` 取严格更优者 ⇒ 同值时仍取**先遇到**的那一格。
+                _yPrevFeet = prevFeet;
+                _yPrevHead = prevHead;
+                _yBest = float.NaN;
+                _yBestCell = Vector2Int.zero;
+                _yAnyOverlap = false;
+                _onScanY ??= OnScanY;
+                GridUtil.ForEach(rect, _onScanY);
 
-                    // ★ 移动平台：落点取台面的【真实】顶部（小数），不是"这一格的顶边"。
-                    //
-                    // 踩过的坑（P1-9「上行托着马里奥平移」）：用格顶边的话，平台上升时
-                    // 台面高度在玩家眼里恒为整数 —— 平台先从马里奥身上穿过去，跨格那一瞬间
-                    // 再把他弹起来一格，看着像"被顶了一下"而不是"被托着走"。
-                    // 登记/查询见 ILevel.SetCarrier / TryGetCarrierTop。
-                    var isCarrier = _level.TryGetCarrierTop(cell.x, cell.y, out var ct);
-                    var carrierTop = isCarrier ? ct : cell.y + 1f;
-
-                    if (_vel.y > 0f)
-                    {
-                        // ★ 移动平台**不算顶棚**：半格厚的台面，人可以贴着它下面跳上去、从它中间穿过
-                        //   （原版就是"跳上去"这条路；整格登记会让人在台面下方被一堵隐形天花板顶回来，
-                        //   用户 2026-09-19 实测：「跳不上去移动的平台」）。
-                        if (isCarrier) continue;
-
-                        // 上升：只有"解算前头顶还在这一格底边之下"的格子才算顶棚。
-                        // 否则说明人已经嵌在格子里了（见 MoveAndCollide 末尾的 Depenetrate），
-                        // 那种情况绝不能再按"顶棚"处理 —— 那会把人往下按进地里。
-                        if (prevHead > cell.y) continue;
-                        if (float.IsNaN(best) || cell.y < best) { best = cell.y; bestCell = cell; }
-                    }
-                    else
-                    {
-                        // 下落：只有"解算前脚底已经在这一格顶面之上"的格子才算落点。
-                        //
-                        // ★ 移动平台：台面每帧都在动，拿"上一帧脚底 ≥ 台面顶"硬卡会漏判（台面上升时把人漏掉）
-                        //   —— 但也**不能无条件吸附**：那样台面从人腰上扫过会把人生生拽上去
-                        //   （用户实测「会被弹开」）。所以用"一帧内台面能升多少"当带宽（见
-                        //   `GameConst.PlatformCatchBand` 的推导）：脚底离台面顶 ≤ 0.2 格 ⇒ 托住/落上去；
-                        //   离得更远 ⇒ 忽略这一格（人从台面旁边/下面过去）。
-                        if (isCarrier)
-                        {
-                            if (prevFeet < carrierTop - GameConst.PlatformCatchBand) continue;
-                        }
-                        else if (prevFeet < carrierTop) continue;
-
-                        if (float.IsNaN(best) || carrierTop > best) { best = carrierTop; bestCell = cell; }
-                    }
-                }
-
-                if (!float.IsNaN(best))
+                if (!float.IsNaN(_yBest))
                 {
                     if (_vel.y > 0f)
                     {
@@ -920,17 +876,17 @@ namespace SuperMario.Module.Player
                         //   这里原来写的是 `carrierTop - _size.y`（= 格的**顶**边减身高）⇒ 马里奥被
                         //   直接摆到障碍【上方】——用户报的就是这个：「我顶问号/顶砖块/顶任何东西，
                         //   都会直接瞬移到障碍上方」。撞头顶时人必须**留在下方**。
-                        newY = best - _size.y;
-                        _headHit = bestCell;
+                        newY = _yBest - _size.y;
+                        _headHit = _yBestCell;
                     }
                     else
                     {
-                        newY = best;
+                        newY = _yBest;
                         Grounded = true;
                     }
                     _vel.y = 0f;
                 }
-                else if (anyOverlap)
+                else if (_yAnyOverlap)
                 {
                     // 已经嵌在实心格里（上一帧就被塞进去、或被平台推的）：这一帧先别往更深处走。
                     // 真正把人弄出来由下面的 Depenetrate 负责。
@@ -973,56 +929,25 @@ namespace SuperMario.Module.Player
             for (var guard = 0; guard < 4; guard++)
             {
                 var b = Bounds;
-                var push = Vector2.zero;
-                var bestDepth = float.MaxValue;
-                foreach (var cell in Overlap(b))
-                {
-                    if (!_level.IsSolidTile(cell.x, cell.y)) continue;
+                // 扫描状态放字段（委托缓存到字段 ⇒ 零分配）。口径与原 foreach 逐字一致：
+                // 顺序仍是 y 升序 / x 升序，`d >= bestDepth` 直接跳过 ⇒ 同深度时仍取**先遇到**的那一格。
+                _dRect = b;
+                _dPush = Vector2.zero;
+                _dBestDepth = float.MaxValue;
+                _onScanDepen ??= OnScanDepen;
+                GridUtil.ForEach(b, _onScanDepen);
 
-                    // ★ 移动平台（载具）格要单独处理 —— **站在台面上不算"嵌进实心格"**。
-                    //
-                    // 踩过的坑（用户实测 2026-09-19：「上下移动的台阶站不上去，会被弹开」+
-                    // 「上下的不知道为什么会混在一起」，同局日志 23:11:22/25 连出
-                    // `[Warn] 碰撞兜底脱困 4 次仍有重叠`）：平台登记的是**整格实心**
-                    // （格底边比台面真实顶面低最多 1 格，见 `Platform.RegisterCells`），
-                    // 而人站在台面上时脚底 = `carrierTop`，本来就落在**这一格内部** ⇒ 这里
-                    // 每帧都判"嵌格"，按最小位移把人推到**格子的顶边**（= 台面以上 0.4 格）；
-                    // 下一帧台面又升上来、Y 解算再把人按回 `carrierTop` ⇒
-                    // **弹起→按回→弹起** 的死循环（观感就是"站不上去、被弹开"，而且每帧都报重叠）。
-                    //
-                    // 判据（2026-09-19 二次修正）：移动平台格**一律跳过**。
-                    //
-                    // 第一版是"脚底在台面顶面之上就跳过、否则往台面顶推" —— 那会把人从台面**下面**
-                    // 顶到台面上去（人贴着台面下方跳过去会被拽上来）。既然台面是"半格厚、可从下方穿过、
-                    // 只能从上面落上去"的（见 MoveAndCollide 的三条分支），这里就不该参与脱困：
-                    // 站着时脚底 = carrierTop 本来就在格内（不是嵌格），而从下面穿过时更不该被推。
-                    if (_level.TryGetCarrierTop(cell.x, cell.y, out _)) continue;
+                if (_dBestDepth == float.MaxValue) return;        // 干净了
 
-                    var left = b.xMax - cell.x;                 // 往左推这么多
-                    var right = cell.x + 1f - b.xMin;           // 往右推这么多
-                    var up = cell.y + 1f - b.yMin;              // 往上推这么多
-                    var down = b.yMax - cell.y;                 // 往下推这么多
-                    var d = Mathf.Min(Mathf.Min(left, right), Mathf.Min(up, down));
-                    if (d >= bestDepth) continue;
-
-                    bestDepth = d;
-                    push = Mathf.Approximately(d, up) ? new Vector2(0f, up)
-                         : Mathf.Approximately(d, left) ? new Vector2(-left, 0f)
-                         : Mathf.Approximately(d, right) ? new Vector2(right, 0f)
-                         : new Vector2(0f, -down);
-                }
-
-                if (bestDepth == float.MaxValue) return;        // 干净了
-
-                transform.position += new Vector3(push.x, push.y, 0f);
+                transform.position += new Vector3(_dPush.x, _dPush.y, 0f);
                 RecomputeBounds();
 
                 if (!_depenLogged)
                 {
                     _depenLogged = true;
                     Game.Logger.Warn("Player",
-                        $"碰撞兜底脱困：解算后仍压在实心格上，按最小位移 {bestDepth:F3} 格推开 " +
-                        $"（push=({push.x:F3},{push.y:F3})，解算前脚底={b.y:F2}）。" +
+                        $"碰撞兜底脱困：解算后仍压在实心格上，按最小位移 {_dBestDepth:F3} 格推开 " +
+                        $"（push=({_dPush.x:F3},{_dPush.y:F3})，解算前脚底={b.y:F2}）。" +
                         "出现这一行说明前面某一帧把人塞进了格子 —— 把这一行连同前后日志一起报出来");
                 }
             }
@@ -1040,23 +965,164 @@ namespace SuperMario.Module.Player
             return h;
         }
 
+        // ───────── 逐格扫描（收敛到引擎 GridUtil）─────────
+        //
+        // 原先这里有一个私有迭代器 `Overlap`（`yield return new Vector2Int(x,y)`），
+        // 它与 ItemModule / FireballModule / EnemyModule 里那三份**逐字相同** ⇒ 已下沉为引擎
+        // `CloverEngine.GridUtil`（出处见 `Runtime/Core/GridUtil.cs` 文件头，它逐字复刻了原口径：
+        // `xMin = FloorToInt(r.xMin)`、`xMax = FloorToInt(r.xMax - 0.0001f)`、y 外层 / x 内层**升序**，
+        // 连那个 `- 0.0001f` 收边量都保留为 `GridUtil.EdgeEpsilon`）。
+        //
+        // ⛔ 用 `ForEach` 而**不是** `GridUtil.Enumerate`：后者是迭代器，每次调用都分配
+        //    （状态机 + 装箱枚举器），而这四处都是**每帧**跑的碰撞查询。`ForEach` 只有在
+        //    "委托已缓存"时才不分配 —— 引擎文件头 ★ GC 写明「方法组写法在 Unity 的 C# 9 下
+        //    每次转换也分配一个委托」⇒ 下面四个委托都**存进字段**。
+        //
+        // ⛔ 算法本身一字未动（用多大半径、几点采样、撞墙是停还是滑 = 玩法手感，引擎明确不管，
+        //    见 Runtime/Presentation/Map.cs:14-15）：仍是逐轴解算、仍是"命中第一格就停"，
+        //    只是"怎么枚举格"从自写迭代器换成引擎能力。
+        //
+        // 状态也都放字段（委托不捕获局部变量 ⇒ 无闭包分配）。这三个方法彼此不重入：
+        // 它们各在 MoveAndCollide / Depenetrate 的**线性**流程里被调一次。
+
+        /// <summary>X 轴扫描状态：扫描期间的目标 x（命中时被回调改写）、是否命中。</summary>
+        private float _xNewX;
+        private bool _xHit;
+
+        /// <summary>Y 轴扫描状态（口径见 <see cref="OnScanY"/>）。</summary>
+        private float _yPrevFeet;
+        private float _yPrevHead;
+        private float _yBest;
+        private Vector2Int _yBestCell;
+        private bool _yAnyOverlap;
+
+        /// <summary>脱困扫描状态。</summary>
+        private Rect _dRect;
+        private Vector2 _dPush;
+        private float _dBestDepth;
+
+        /// <summary>起身空间扫描状态。</summary>
+        private bool _hBlocked;
+
+        private Action<int, int> _onScanX;
+        private Action<int, int> _onScanY;
+        private Action<int, int> _onScanDepen;
+        private Action<int, int> _onScanHead;
+
         /// <summary>
-        /// 枚举一个世界矩形覆盖到的所有格。
-        /// 用 FloorToInt 而不是 (int) 转换：负数坐标下 (int) 向零取整会漏掉左边/下面那一格。
+        /// X 轴碰撞解算的逐格回调。口径与原来的 `foreach` + `Overlap` 迭代器逐字一致：
+        /// ① 命中第一格即停（`_xHit` 复刻原来的 `break`；引擎 ForEach 无早退，所以用守卫挡后续格）；
+        /// ② 移动平台格不挡横移。
         /// </summary>
-        private static System.Collections.Generic.IEnumerable<Vector2Int> Overlap(Rect r)
+        private void OnScanX(int tx, int ty)
         {
-            var x0 = Mathf.FloorToInt(r.xMin);
-            var x1 = Mathf.FloorToInt(r.xMax - 0.0001f);
-            var y0 = Mathf.FloorToInt(r.yMin);
-            var y1 = Mathf.FloorToInt(r.yMax - 0.0001f);
-            for (var y = y0; y <= y1; y++)
+            if (_xHit) return;                                   // = 原 `break`（一帧内只解一次）
+            if (!_level.IsSolidTile(tx, ty)) return;
+            // ★ 移动平台格【不挡横移】：台面只有半格厚，原版里人是从侧面走进/跳上去的，
+            //   不是被一堵隐形墙拦住（那一格只是"格子里有台面"的近似登记，见 `Platform.RegisterCells`）。
+            //   用户 2026-09-19 实测症状：「跳不上去移动的平台」—— 根因就是这里把整格当墙。
+            if (_level.TryGetCarrierTop(tx, ty, out _)) return;
+            _xNewX = _vel.x > 0f ? tx - _size.x * 0.5f : tx + 1f + _size.x * 0.5f;
+            _xHit = true;
+        }
+
+        /// <summary>
+        /// Y 轴碰撞解算的逐格回调（原 MoveAndCollide 里那段 foreach 的循环体，逐行搬进来）。
+        /// 顺序由引擎 ForEach 保证 = y 升序 / x 升序（与旧迭代器相同）⇒ 同值时仍取先遇到的那一格。
+        /// </summary>
+        private void OnScanY(int tx, int ty)
+        {
+            if (!_level.IsSolidTile(tx, ty)) return;
+            _yAnyOverlap = true;
+
+            // ★ 移动平台：落点取台面的【真实】顶部（小数），不是"这一格的顶边"。
+            //
+            // 踩过的坑（P1-9「上行托着马里奥平移」）：用格顶边的话，平台上升时
+            // 台面高度在玩家眼里恒为整数 —— 平台先从马里奥身上穿过去，跨格那一瞬间
+            // 再把他弹起来一格，看着像"被顶了一下"而不是"被托着走"。
+            // 登记/查询见 ILevel.SetCarrier / TryGetCarrierTop。
+            var isCarrier = _level.TryGetCarrierTop(tx, ty, out var ct);
+            var carrierTop = isCarrier ? ct : ty + 1f;
+
+            if (_vel.y > 0f)
             {
-                for (var x = x0; x <= x1; x++)
-                {
-                    yield return new Vector2Int(x, y);
-                }
+                // ★ 移动平台**不算顶棚**：半格厚的台面，人可以贴着它下面跳上去、从它中间穿过
+                //   （原版就是"跳上去"这条路；整格登记会让人在台面下方被一堵隐形天花板顶回来，
+                //   用户 2026-09-19 实测：「跳不上去移动的平台」）。
+                if (isCarrier) return;
+
+                // 上升：只有"解算前头顶还在这一格底边之下"的格子才算顶棚。
+                // 否则说明人已经嵌在格子里了（见 MoveAndCollide 末尾的 Depenetrate），
+                // 那种情况绝不能再按"顶棚"处理 —— 那会把人往下按进地里。
+                if (_yPrevHead > ty) return;
+                if (float.IsNaN(_yBest) || ty < _yBest) { _yBest = ty; _yBestCell = new Vector2Int(tx, ty); }
             }
+            else
+            {
+                // 下落：只有"解算前脚底已经在这一格顶面之上"的格子才算落点。
+                //
+                // ★ 移动平台：台面每帧都在动，拿"上一帧脚底 ≥ 台面顶"硬卡会漏判（台面上升时把人漏掉）
+                //   —— 但也**不能无条件吸附**：那样台面从人腰上扫过会把人生生拽上去
+                //   （用户实测「会被弹开」）。所以用"一帧内台面能升多少"当带宽（见
+                //   `GameConst.PlatformCatchBand` 的推导）：脚底离台面顶 ≤ 0.2 格 ⇒ 托住/落上去；
+                //   离得更远 ⇒ 忽略这一格（人从台面旁边/下面过去）。
+                if (isCarrier)
+                {
+                    if (_yPrevFeet < carrierTop - GameConst.PlatformCatchBand) return;
+                }
+                else if (_yPrevFeet < carrierTop) return;
+
+                if (float.IsNaN(_yBest) || carrierTop > _yBest) { _yBest = carrierTop; _yBestCell = new Vector2Int(tx, ty); }
+            }
+        }
+
+        /// <summary>
+        /// 兜底脱困的逐格回调（原 Depenetrate 里那段 foreach 的循环体，逐行搬进来）。
+        /// 取"最小位移方向"，严格更优才替换 ⇒ 同深度时仍取先遇到的那一格（与旧迭代器顺序一致）。
+        /// </summary>
+        private void OnScanDepen(int tx, int ty)
+        {
+            if (!_level.IsSolidTile(tx, ty)) return;
+
+            // ★ 移动平台（载具）格要单独处理 —— **站在台面上不算"嵌进实心格"**。
+            //
+            // 踩过的坑（用户实测 2026-09-19：「上下移动的台阶站不上去，会被弹开」+
+            // 「上下的不知道为什么会混在一起」，同局日志 23:11:22/25 连出
+            // `[Warn] 碰撞兜底脱困 4 次仍有重叠`）：平台登记的是**整格实心**
+            // （格底边比台面真实顶面低最多 1 格，见 `Platform.RegisterCells`），
+            // 而人站在台面上时脚底 = `carrierTop`，本来就落在**这一格内部** ⇒ 这里
+            // 每帧都判"嵌格"，按最小位移把人推到**格子的顶边**（= 台面以上 0.4 格）；
+            // 下一帧台面又升上来、Y 解算再把人按回 `carrierTop` ⇒
+            // **弹起→按回→弹起** 的死循环（观感就是"站不上去、被弹开"，而且每帧都报重叠）。
+            //
+            // 判据（2026-09-19 二次修正）：移动平台格**一律跳过**。
+            //
+            // 第一版是"脚底在台面顶面之上就跳过、否则往台面顶推" —— 那会把人从台面**下面**
+            // 顶到台面上去（人贴着台面下方跳过去会被拽上来）。既然台面是"半格厚、可从下方穿过、
+            // 只能从上面落上去"的（见 MoveAndCollide 的三条分支），这里就不该参与脱困：
+            // 站着时脚底 = carrierTop 本来就在格内（不是嵌格），而从下面穿过时更不该被推。
+            if (_level.TryGetCarrierTop(tx, ty, out _)) return;
+
+            var b = _dRect;
+            var left = b.xMax - tx;                 // 往左推这么多
+            var right = tx + 1f - b.xMin;           // 往右推这么多
+            var up = ty + 1f - b.yMin;              // 往上推这么多
+            var down = b.yMax - ty;                 // 往下推这么多
+            var d = Mathf.Min(Mathf.Min(left, right), Mathf.Min(up, down));
+            if (d >= _dBestDepth) return;
+
+            _dBestDepth = d;
+            _dPush = Mathf.Approximately(d, up) ? new Vector2(0f, up)
+                  : Mathf.Approximately(d, left) ? new Vector2(-left, 0f)
+                  : Mathf.Approximately(d, right) ? new Vector2(right, 0f)
+                  : new Vector2(0f, -down);
+        }
+
+        /// <summary>起身空间扫描的逐格回调：撞到任一实心格就标记（= 原 `return false`）。</summary>
+        private void OnScanHead(int tx, int ty)
+        {
+            if (_hBlocked) return;                               // 已判定被压住，后续格不必再看
+            if (_level.IsSolidTile(tx, ty)) _hBlocked = true;
         }
 
         // ───────────────────────── 表现 ─────────────────────────
@@ -1097,9 +1163,11 @@ namespace SuperMario.Module.Player
                 ? GameConst.SmallSize : GameConst.BigSize;
             var p = transform.position;
             var rect = new Rect(p.x - stand.x * 0.5f, p.y, stand.x, stand.y);
-            foreach (var cell in Overlap(rect))
-                if (_level.IsSolidTile(cell.x, cell.y)) return false;
-            return true;
+            // 逐格枚举收敛到引擎 GridUtil.ForEach；"撞到就返回 false"由 _hBlocked 复刻原 `return false`。
+            _hBlocked = false;
+            _onScanHead ??= OnScanHead;
+            GridUtil.ForEach(rect, _onScanHead);
+            return !_hBlocked;
         }
 
         /// <summary>

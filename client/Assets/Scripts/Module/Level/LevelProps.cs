@@ -23,6 +23,8 @@ namespace SuperMario.Module.Level
 
         public static void Build(ILevel level, Transform parent, Action onDone)
         {
+            // ★ 池化取舍：本文件的 5 处 `new GameObject`（Props 根 / 杆身 / 顶球 / 旗子 / 城堡）
+            //   各 1 个、生命周期 = 一整关，**不进对象池** —— 池化只在"一局里反复生成销毁"时才划算。
             var root = new GameObject("Props").transform;
             root.SetParent(parent, false);
 
@@ -50,24 +52,27 @@ namespace SuperMario.Module.Level
                 }
             }
 
-            // ★ 看门狗：这几项里只要有一个回调不来，流程就会【永久】卡在 Loading ——
-            // 而且全程没有任何报错（黑屏 + 读条屏不消失），极难定位。
+            // ★ 这里【曾经】有一个 5 秒看门狗，已删除 —— 它的前提是**错的**，留着是"假 Error"的源头。
             //
-            // 为什么会不回调：资源模块对"路径不存在"的加载【不会调用回调】（不是回 null）。
-            // 实测踩过一次：城堡误用 ResPaths.Flagpole() 去 Sprites/Flagpole/ 里找
-            // Castle_0，文件不存在，pending 永远停在 1，流程死锁在 Loading。
+            // 旧前提（原注释原文）："资源模块对'路径不存在'的加载【不会调用回调】（不是回 null）"。
+            // 回读引擎实现后确认与契约不符：
+            //   · `Runtime/Core/Contracts.cs:1033`（以及 :1042 带进度版）明写
+            //     "<c>callback</c>：加载完成回调，**加载失败时资源参数为 null**"；
+            //   · `Runtime/Resource/ResourceManager.cs:305-343` 的 `CompletePending` 在
+            //     `asset == null` 时先打一条 "加载失败：{path}"（:326），**然后照样把全部回调
+            //     逐个 invoke 一遍**（:329-339，参数就是 null）；
+            //   · `Runtime/Resource/ResourceBackend.cs:233-259` 的 Resources 后端：路径非法时
+            //     自己 `onDone?.Invoke(null)` 后就返回（:242），正常路径走 `req.completed` 事件
+            //     （`:258`，文件不存在时该事件照样触发、`req.asset` 就是 null）；
+            //     `ResourceManager.cs:217-221` 还给 `BeginLoad` 整个包了一层 catch ⇒ 抛异常也是
+            //     `CompletePending(pending, null)`。
+            //   ⇒ **回调必到**（成功给对象、失败给 null）。所以"5 秒后抢跑"永远只会在
+            //     一次正常加载里插一条假 Error（实测代价：把 `[Error] = 0` 的验收判据污染掉）。
             //
-            // 与其让它安静地卡住，不如超时后报一条明确的 Error 并强行推进 ——
-            // 让"资源路径写错"以它本来的面目暴露出来。
-            Game.Timer.After(5f, () =>
-            {
-                if (finished) return;
-                Game.Logger.Error("Level",
-                    $"关卡装饰加载超时（还差 {pending} 项未回调），强制推进流程；" +
-                    "多半是资源路径写错 —— 检查 ResPaths 下的目录与 SpriteNames 是否对得上");
-                finished = true;
-                onDone?.Invoke();
-            });
+            // 现在的口径：**"资源缺失"由每个回调自己判 `sp == null` 并报 Error**（下面四处都有），
+            // 而"回调真的没来"（引擎级故障）由 `AppFlow` 那条绑定 Loading token 的
+            // `AfterUnscaled` 看门狗兜 —— 判据是"`fsm` 仍是 Loading 且 token 未变"，
+            // 也就是"确实还有回调没到"，而不是"路径不存在"。两条判据各判各的事，不再互相冒充。
 
             // 杆身：用一张 1 格宽的竖图纵向拉伸到 PoleHeight 格。
             Game.Res.LoadAsset<Sprite>(ResPaths.Flagpole(SpriteNames.FlagpolePole), sp =>
@@ -99,6 +104,8 @@ namespace SuperMario.Module.Level
                 var sr = go.AddComponent<SpriteRenderer>();
                 sr.sprite = sp;
                 sr.sortingOrder = 2;
+                // 与其余三处同口径：失败回调必到（参数为 null），所以缺失只能在这里报（见上面的修正说明）。
+                if (sp == null) Game.Logger.Error("Level", $"旗杆顶球贴图缺失:{SpriteNames.FlagpoleTop}");
                 Done();
             });
 
@@ -124,7 +131,8 @@ namespace SuperMario.Module.Level
 
             // 城堡：整张图（10x11 格），底部对齐地面。
             // 注意目录：城堡在 Sprites/Castle/ 下，不要写成 ResPaths.Flagpole() ——
-            // 那条路径下没有 Castle_0，加载回调不会来（见上面的看门狗注释）。
+            // 那条路径下没有 Castle_0，回调会带着 **null** 到（不是"不来"，见上面的修正说明），
+            // 于是下面那条 `sp == null` 的 Error 会直接点名是哪个常量写错了。
             Game.Res.LoadAsset<Sprite>(ResPaths.Castle(SpriteNames.Castle), sp =>
             {
                 var go = new GameObject("Castle");

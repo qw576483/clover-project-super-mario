@@ -1,5 +1,4 @@
 using System.Collections;
-using System.IO;
 using CloverEngine;
 using NUnit.Framework;
 using SuperMario.Core;
@@ -19,20 +18,18 @@ namespace SuperMario.Tests
     /// （穿模）。这三条都不是编译器能发现的，但都是"打开就发现游戏不能玩"级别的问题。
     /// </para>
     /// <para>
-    /// 顺路把关键画面截图到 <c>_smb_work/shots</c>：交付标准是"像原版 1-1"，
+    /// 顺路把关键画面截图到 <c>&lt;项目根&gt;/.ai-tmp/screenshots</c>：交付标准是"像原版 1-1"，
     /// 而像不像只能看画面（见 clover-engine skill 的模态自审要求）。
+    /// ⛔ 截图**不落工程树**（见 <see cref="SuperMario.Core.EvidencePaths"/>）：原先是工程内的
+    /// <c>_smb_work/shots</c>，跑一次就在 <c>Assets/</c> 里留一堆 png。
     /// </para>
     /// </summary>
     public sealed class SmokeTests
     {
-        private const string ShotDir = "_smb_work/shots";
-
         [UnityTest]
         [Timeout(180000)]
         public IEnumerator Boot_Into_World11_And_PlayerStandsOnGround()
         {
-            if (!Directory.Exists(ShotDir)) Directory.CreateDirectory(ShotDir);
-
             // ── 1. 启动：从 Boot 场景走真实流程 ──
             SceneManager.LoadScene(Scenes.Boot);
             yield return null;
@@ -115,23 +112,17 @@ namespace SuperMario.Tests
 
         private static IEnumerator Shot(string name)
         {
-            // 用 ReadPixels 而不是 ScreenCapture.CaptureScreenshot：
-            // 后者属于 UnityEngine.ScreenCaptureModule，本工程没引入那个模块；
-            // 而 ReadPixels / EncodeToPNG 分别在 Core 与 ImageConversion（已引入）里。
-            // 另外 ReadPixels 必须在帧末调用，否则会抓到上一次的缓冲。
+            // 帧末那一拍（引擎 Screenshot 的契约：ReadPixels 必须在渲染完成后**同帧内**取，
+            // 排帧末是调用方的责任 —— 引擎刻意不替业务排，见 `Runtime/Core/Screenshot.cs` 文件头）。
             yield return new WaitForEndOfFrame();
 
-            var w = Screen.width;
-            var h = Screen.height;
-            if (w <= 0 || h <= 0) { Debug.LogWarning($"[Smoke] 截图 {name} 跳过：屏幕尺寸为 {w}x{h}"); yield break; }
-
-            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
-            tex.ReadPixels(new Rect(0f, 0f, w, h), 0, 0);
-            tex.Apply();
-            File.WriteAllBytes($"{ShotDir}/{name}.png", tex.EncodeToPNG());
-            Object.Destroy(tex);
-
-            Debug.Log($"[Smoke] 截图 {name}（{w}x{h}）");
+            // 收敛到引擎 `CloverEngine.Screenshot.CaptureToFile`：原来手写的
+            // `Texture2D` + `ReadPixels` + `EncodeToPNG` + `Destroy` 与 `Editor/SmokeScreenshots.cs`
+            // 里那份**逐字重复**；引擎版把"目录不存在 / 屏幕尺寸非法 / 编码失败"这些失败分支
+            // 统一成"返回 false + Error 留痕"（手写版是静默的），并自己销毁临时纹理。
+            var path = EvidencePaths.Shot(name);
+            if (!Screenshot.CaptureToFile(path))
+                Debug.LogWarning($"[Smoke] 截图 {name} 失败（见 [Error] Screenshot 那一行）：{path}");
             yield return null;
         }
     }

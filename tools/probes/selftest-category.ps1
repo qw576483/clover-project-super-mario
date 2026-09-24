@@ -61,16 +61,20 @@ try {
     ("FAIL=" + $r.Fail)
 } finally { (Get-Item $pD).LastWriteTime = $oD }
 
-# E) known-bad: >5 Play sessions in the current round => play-budget FAIL.
-$ledger = Join-Path $tmp 'play-log.tsv'
+# E) known-bad (retargeted 2026-09-24): a ledger row whose reason column (4) is EMPTY => play-budget FAIL.
+#    Why retargeted: the old scenario appended 6 rows and expected the per-piece CEILING to trip. That
+#    ceiling has been ABOLISHED (no upper bound on Play sessions -- more rows is more evidence, not a
+#    violation), so "add more rows" must NOT be able to turn the gate red any more. What stays auditable
+#    is the reason itself: a session with no reason cannot be justified.
+#    NOTE: the ledger path used to be $tmp (= tools/probes), which does not exist => this scenario threw
+#    before it could check anything. It now points at the real ledger the gate reads.
+$ledger = Join-Path $root '.ai-tmp\test\play-log.tsv'
 $ledgerTxt = [System.IO.File]::ReadAllText($ledger, [System.Text.Encoding]::UTF8)
 try {
-  $add = ''
-  for ($i = 1; $i -le 6; $i++) { $add += ("2026-09-19T16:59`tclover-impl`tselftest`tself-test row " + $i + "`r`n") }
-  [System.IO.File]::AppendAllText($ledger, $add, [System.Text.Encoding]::UTF8)
-  $r = Run-Gate 'E-play-budget-over'
-  Check 'E 6 rows in this round' 'FAIL>=1 play-budget' `
-    (($r.Fail -ge 1) -and ($r.Text -match 'play-budget  this piece = 6')) ("FAIL=" + $r.Fail)
+  [System.IO.File]::AppendAllText($ledger, ("2026-09-19T16:59`tclover-impl`tselftest`t`r`n"), [System.Text.Encoding]::UTF8)
+  $r = Run-Gate 'E-row-without-reason'
+  Check 'E row without a reason' 'FAIL>=1 play-budget' `
+    (($r.Fail -ge 1) -and ($r.Text -match 'row without a reason in column 4')) ("FAIL=" + $r.Fail)
 } finally { [System.IO.File]::WriteAllText($ledger, $ledgerTxt, [System.Text.Encoding]::UTF8) }
 
 # F) known-bad: a visual row loses its contact-sheet cell => evidence-economy FAIL.
@@ -83,14 +87,17 @@ try {
     (($r.Fail -ge 1) -and ($r.Text -match 'evidence-economy  [0-9]+/[0-9]+ visual row\(s\) have no cell')) ("FAIL=" + $r.Fail)
 } finally { Move-Item $bak $idxTsv }
 
-# G) known-bad: a ledger history row without the relaxation marker => play-budget FAIL (accounting must be auditable).
+# G) known-bad (retargeted 2026-09-24): the "# ROUND-START <iso>" boundary is missing => play-budget FAIL.
+#    Why retargeted: the old scenario blanked the relaxation word, which only existed to police the
+#    abolished ceiling. The round boundary is still load-bearing -- item 18 (evidence-economy) counts
+#    repetitions of the same scene within THIS piece, so without the boundary that count is unauditable.
 $ledgerTxt2 = [System.IO.File]::ReadAllText($ledger, [System.Text.Encoding]::UTF8)
 try {
-  $rel = ([char[]]@(0x653E, 0x5BBD) -join '')          # the relaxation marker itself
-  [System.IO.File]::WriteAllText($ledger, ($ledgerTxt2 -replace $rel, 'x'), [System.Text.Encoding]::UTF8)
-  $r = Run-Gate 'G-history-not-marked'
-  Check 'G history row without marker' 'FAIL>=1 play-budget' `
-    (($r.Fail -ge 1) -and ($r.Text -match 'history row without the relaxation marker')) ("FAIL=" + $r.Fail)
+  $stripped = (($ledgerTxt2 -split "`r`n") | Where-Object { $_ -notmatch '^\s*#\s*ROUND-START' }) -join "`r`n"
+  [System.IO.File]::WriteAllText($ledger, $stripped, [System.Text.Encoding]::UTF8)
+  $r = Run-Gate 'G-no-round-boundary'
+  Check 'G no ROUND-START boundary' 'FAIL>=1 play-budget' `
+    (($r.Fail -ge 1) -and ($r.Text -match "no '# ROUND-START")) ("FAIL=" + $r.Fail)
 } finally { [System.IO.File]::WriteAllText($ledger, $ledgerTxt2, [System.Text.Encoding]::UTF8) }
 
 # restore check: the tree must be green again

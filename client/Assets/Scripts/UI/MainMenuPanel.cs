@@ -125,21 +125,15 @@ namespace SuperMario.UI
             // 静态子节点，**不跟随任何动画、不挂在任何"只有某个按钮出现时才可见"的容器里** ——
             // 标题屏一画出来它就在。
             //
-            // ⚠️ 必须**锚到底边**（anchorMin/Max = (0.5,0)、pivot (0.5,0)、y = 16），
-            // 不能写固定的负 y：画布半高是 CanvasScaler 按当前画面比例算的，不是恒定 540
-            // （启动画面那处就是这么漏掉的，见 `BootPanel.cs` 的注释）。
+            // ⚠️ 必须**锚到底边**，不能写固定的负 y：画布半高是 CanvasScaler 按当前画面比例算的，
+            // 不是恒定 540（启动画面那处就是这么漏掉的，见 `BootPanel.cs` 的注释）。
+            // ⇒ 贴底这一步现在由引擎的 `UIFactory.CreateCreditLabel` 负责（底部锚点钉死），
+            //   三段式（本面板 / 启动画面）共用 `UIBuilder.CreditLabel` 这**一个**入口。
             //
-            // 字体同理必须走 `CreditLabel`（真小写字形）—— 用像素字体会渲染成 `BY CLOVER-ENGINE`。
+            // 字体必须真有小写字形（不是本项目的 NES 像素字体）—— 用像素字体会渲染成 `BY CLOVER-ENGINE`。
             // 颜色 = **白色**（用户 2026-09-19 明说：「首页面 by clover engine 要变成白色的。不要黑色的」）。
-        // ⛔ 别再用 0.45 的深灰：标题屏底色是浅蓝紫，深灰在它上面看起来就是"黑的"（用户原话）。
-        var sig = UIBuilder.CreditLabel(transform, "Signature", UIBuilder.CreditText,
-            16, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(800f, 32f),
-            Color.white);
-            var sigRt = sig.rectTransform;
-            sigRt.anchorMin = new Vector2(0.5f, 0f);
-            sigRt.anchorMax = new Vector2(0.5f, 0f);
-            sigRt.pivot = new Vector2(0.5f, 0f);
-            sigRt.anchoredPosition = new Vector2(0f, 16f);
+            // ⛔ 别再用 0.45 的深灰：标题屏底色是浅蓝紫，深灰在它上面看起来就是"黑的"（用户原话）。
+            UIBuilder.CreditLabel(transform, Color.white);
         }
 
         public override void OnUpdate(float dt)

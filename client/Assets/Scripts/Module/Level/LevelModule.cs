@@ -121,9 +121,16 @@ namespace SuperMario.Module.Level
         public bool Ready { get; private set; }
         public LevelData Data { get; private set; }
         public GameObject Root { get; private set; }
-        public float MinWorldX { get; private set; }
-        public float MaxWorldX { get; private set; }
-        public float GroundTopY { get; private set; } = -3f;
+
+        /// <summary>关卡左边界（世界 x）。**唯一来源 = <see cref="TileWorld.MinX"/>**（构建期由关卡数据的 MinTileX 给）。</summary>
+        public float MinWorldX => _world.MinX;
+
+        /// <summary>关卡右边界（世界 x）。**唯一来源 = <see cref="TileWorld.MaxX"/>**（= 数据 MaxTileX + 1，格 (X,Y) 占 [X, X+1]）。</summary>
+        public float MaxWorldX => _world.MaxX;
+
+        /// <summary>地面顶面高度（世界 y）。**唯一来源 = <see cref="TileWorld.GroundTopY"/>**（构建期由 <see cref="ComputeGroundTop"/> 算）。</summary>
+        public float GroundTopY => _world.GroundTopY;
+
         public float FlagpoleX { get; private set; } = 184.5f;
 
         /// <summary>
@@ -178,41 +185,41 @@ namespace SuperMario.Module.Level
         /// <inheritdoc />
         public float PipeRiseY { get; private set; }
 
-        /// <summary>实心位图。存 HashSet 而不是二维数组：关卡稀疏（803/2900），省内存也省一次清空。</summary>
-        private readonly HashSet<int> _solid = new HashSet<int>();
-
         /// <summary>
-        /// 移动平台格 → 台面真实顶部 y。与 <see cref="_solid"/> 共用同一套 <see cref="Key"/>。
-        /// 数量极少（1-2 只有 2 个平台），用小字典即可。
+        /// 空间事实面（实心位图 + 移动托台顶高 + 世界边界）—— **收敛到引擎 <see cref="TileWorld"/>**。
+        /// <para>
+        /// 出处（引擎侧）：<c>Runtime/Presentation/TileWorld.cs</c> —— 它的实现就是从这里原来的
+        /// 181-215 行（<c>HashSet&lt;int&gt;</c> 位图 + <c>Dictionary&lt;int,float&gt;</c> 托台 + <c>Key(tx,ty)</c>）
+        /// 逐字下沉的。收下它是为了消掉那套 32 位键：`(tx &lt;&lt; 16) ^ (ty + 512)` 在 |tx| ≥ 2^15
+        /// 或 ty 超出 [-512, 65022] 时会**键碰撞** ⇒ 误判实心（"明明没有砖却撞上了"，且不报错）。
+        /// 引擎换成了 64 位双射键。
+        /// </para>
+        /// <para>
+        /// ⛔ 边界口径由引擎 <c>Runtime/Presentation/Map.cs:14-15</c> 划死：本类**只搬"空间事实"**
+        /// （这一格实不实心 / 托台顶面在哪 / 世界到哪为止），**不搬位移解算** ——
+        /// 「输入 → 位移 → 贴墙滑动」（用多大半径、几点采样、撞墙是停还是滑）属玩法手感，
+        /// 留在 <c>PlayerActor</c> 与各实体自己的 <c>Update</c> 里。瓦片贴图绘制也留在本文件（<see cref="FinishBuild"/>）。
+        /// </para>
         /// </summary>
-        private readonly Dictionary<int, float> _carriers = new Dictionary<int, float>();
+        private readonly TileWorld _world = new TileWorld();
 
         private readonly Dictionary<string, Sprite> _spriteCache = new Dictionary<string, Sprite>();
         private int _pendingSprites;
 
-        /// <summary>位图键：把 (tx, ty) 压成一个 int。ty 先偏到非负区间，避免负数位移出符号位。</summary>
-        private static int Key(int tx, int ty) => (tx << 16) ^ (ty + 512);
+        public bool IsSolidTile(int tx, int ty) => _world.IsSolid(tx, ty);
 
-        public bool IsSolidTile(int tx, int ty) => _solid.Contains(Key(tx, ty));
+        public void SetSolid(int tx, int ty, bool solid) => _world.SetSolid(tx, ty, solid);
 
-        public void SetSolid(int tx, int ty, bool solid)
-        {
-            var k = Key(tx, ty);
-            if (solid) _solid.Add(k);
-            else _solid.Remove(k);
-        }
+        public void SetCarrier(int tx, int ty, float topY) => _world.SetCarrierTop(tx, ty, topY);
+        public void ClearCarrier(int tx, int ty) => _world.ClearCarrierTop(tx, ty);
+        public bool TryGetCarrierTop(int tx, int ty, out float topY) => _world.TryGetCarrierTop(tx, ty, out topY);
 
-        public void SetCarrier(int tx, int ty, float topY) => _carriers[Key(tx, ty)] = topY;
-        public void ClearCarrier(int tx, int ty) => _carriers.Remove(Key(tx, ty));
-        public bool TryGetCarrierTop(int tx, int ty, out float topY) => _carriers.TryGetValue(Key(tx, ty), out topY);
-
-        public bool IsSolidAt(float x, float y)
-        {
-            // 世界 → 格：向下取整（世界 x∈[X, X+1) 属于第 X 格）。
-            // 必须用 FloorToInt 而不是 (int)：负数坐标下 (int) 是向零取整，
-            // 会让 x=-0.5 落到第 0 格，表现为「站在坑里也能踩到地」。
-            return IsSolidTile(Mathf.FloorToInt(x), Mathf.FloorToInt(y));
-        }
+        /// <summary>
+        /// 世界坐标 → 格：**必须** <see cref="Mathf.FloorToInt"/>（世界 x∈[X, X+1) 属于第 X 格）。
+        /// 负数坐标下 <c>(int)</c> 是向零取整，会让 x=-0.5 落到第 0 格 —— 表现为「站在坑里也能踩到地」。
+        /// 口径与实现都在引擎 <see cref="TileWorld.IsSolidAt"/>（本方法只是转发）。
+        /// </summary>
+        public bool IsSolidAt(float x, float y) => _world.IsSolidAt(x, y);
 
         /// <summary>
         /// 构建关卡。<paramref name="onDone"/> 在**所有贴图加载完之后**才回调 ——
@@ -221,20 +228,29 @@ namespace SuperMario.Module.Level
         public void Build(LevelData data, Action onDone)
         {
             Data = data;
+            // ★ 池化取舍（本文件全部 4 处 `new GameObject` 都是同一个结论）：**不进对象池**。
+            //   判据是"高频短命" —— 池化只在"同一类对象一局里反复生成/销毁"时才划算；
+            //   这里 ① `[Level]` 根 / ② `Background` / ③ `Terrain` 各 1 个，
+            //   ④ 瓦片每个 1 个 —— **生命周期都 = 一整关**（回菜单时随 `Clear()` 整体销毁），
+            //   一关内从不销毁重生。走池反而要多一层 key 注册 + 归还记账，收益为 0。
+            //   真正高频短命的（火球 / 道具 / 砖块碎片）不在本文件，按各自模块评估。
             Root = new GameObject("[Level]");
 
-            // 实心位图：先建好（纯数据，不需要等贴图），这样碰撞查询立刻可用。
+            // ★ 世界边界先给一次（**唯一来源 = TileWorld.SetBounds**）：
+            //   · MinX  = 数据里最小的格 x（原版 1-1 是 -13，左侧那段预留延伸地面）；
+            //   · MaxX  = 最大格 x + 1（格 (X,Y) 占世界 [X, X+1]，所以右边界要 +1）；
+            //   · GroundTopY = ComputeGroundTop(data)（最厚那一层实心地形的上沿）。
+            //   下面 FlagpoleX / CastleDoorX 都由 MaxWorldX（= _world.MaxX）推出来，所以必须先设。
+            _world.SetBounds(data.MinTileX, data.MaxTileX + 1, ComputeGroundTop(data));
+
+            // 实心位图：纯数据，不需要等贴图 ⇒ 碰撞查询立刻可用（贴图加载完才 FinishBuild）。
             var solidCount = 0;
             foreach (var t in data.Tiles)
             {
                 if (t.Layer != 0) continue;
-                _solid.Add(Key(t.X, t.Y));
+                _world.SetSolid(t.X, t.Y);
                 solidCount++;
             }
-
-            MinWorldX = data.MinTileX;
-            MaxWorldX = data.MaxTileX + 1;
-            GroundTopY = ComputeGroundTop(data);
 
             // ★ 旗杆位置：优先用关卡文件里声明的（`# flagpole <格x>`），没有才按公式推。
             //
@@ -263,6 +279,7 @@ namespace SuperMario.Module.Level
             PipeRiseY = data.PipeRiseY;
 
             // 背景与地形各挂一个父节点：方便整体开关（比如"只看碰撞"的调试），也少两万个层级节点。
+            // （不进对象池：一关各 1 个，生命周期 = 一整关，见 Build 开头的池化取舍。）
             var bgRoot = new GameObject("Background").transform;
             bgRoot.SetParent(Root.transform, false);
             var terraRoot = new GameObject("Terrain").transform;
@@ -322,6 +339,8 @@ namespace SuperMario.Module.Level
                 if (!_spriteCache.TryGetValue(t.Sprite, out var sp)) continue;
                 if (skipUndergroundBricks && t.Layer == 0 && t.Sprite == SpriteNames.TileUndergroundBrick) continue;
 
+                // 瓦片保持"现造"（不进对象池）：每个瓦片一关只建一次、随关卡整体销毁，
+                // 生命周期 = 一整关 ⇒ 池化的复用价值为 0（见 Build 开头的池化取舍）。
                 var go = new GameObject(t.Sprite);
                 go.transform.SetParent(t.Layer == 0 ? terraRoot : bgRoot, false);
                 // 瓦片 (X,Y) 占世界 [X,X+1]×[Y,Y+1]，所以中心在 +0.5。
@@ -366,13 +385,18 @@ namespace SuperMario.Module.Level
             return bestY == int.MinValue ? -3f : bestY + 1f;
         }
 
-        /// <summary>销毁整关（回主菜单时调）。对象池与事件由调用方负责收。</summary>
+        /// <summary>
+        /// 销毁整关（回主菜单时调）。对象池与事件由调用方负责收。
+        /// <para>
+        /// <see cref="TileWorld.Clear"/> 只清**格子数据**（实心 + 托台），**不动**世界边界 ——
+        /// 那是"世界事实"，下一次 <see cref="Build"/> 会由 <c>SetBounds</c> 重新给（引擎 TileWorld 的契约）。
+        /// </para>
+        /// </summary>
         public void Clear()
         {
             if (Root != null) UnityEngine.Object.Destroy(Root);
             Root = null;
-            _solid.Clear();
-            _carriers.Clear();
+            _world.Clear();
             _spriteCache.Clear();
             Ready = false;
         }

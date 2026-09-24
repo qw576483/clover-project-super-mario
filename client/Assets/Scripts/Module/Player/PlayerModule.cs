@@ -119,6 +119,14 @@ namespace SuperMario.Module.Player
 
         private readonly SpriteSet _sprites = new SpriteSet();
 
+        /// <summary>
+        /// 已"钉住"（各自持一次引用计数）的精灵路径；空数组 = 还没加载过。
+        /// <para>引擎 <see cref="SpriteSet"/> 刻意**不持引用计数**（预热那次 +1 由引擎自己还掉），
+        /// 条目在水位压力下会被 LRU 淘汰 ⇒ 淘汰后 <c>Get</c> 返回 null、表现是"马里奥隐形"。
+        /// 所以本项目要自己钉住整关用到的那批图，换关卡时在 <see cref="Clear"/> 里还回去。</para>
+        /// </summary>
+        private string[] _pinnedPaths = Array.Empty<string>();
+
         public PlayerModule(ILevel level, Audio.IAudio audio)
         {
             _level = level;
@@ -148,7 +156,25 @@ namespace SuperMario.Module.Player
                 MarioAction.BigClimb0, MarioAction.BigClimb1,
                 MarioAction.FireClimb0, MarioAction.FireClimb1,
             };
-            _sprites.Load(wanted, onDone);
+            // ★ 精灵集合收敛到引擎 `SpriteSet`（`clover-client-unity-engine/Runtime/Resource/SpriteSet.cs`）：
+            //   它按路径登记两个名字（全路径 + **末段去扩展名**），而 `ResPaths.Mario(a)` 的末段
+            //   就是动作常量本身（`MarioDir + "/" + a`）⇒ 下游 `_sprites.Get(MarioAction.X)` 与原来同义。
+            //   （# takeover: 原派工片在收尾前中断，本处由主 agent 按冻结签名补完。）
+            var paths = Array.ConvertAll(wanted, ResPaths.Mario);
+            _pinnedPaths = paths;
+
+            _sprites.LoadSet(paths, () =>
+            {
+                // ⚠️ 加载完成后**自己钉住**这批图：引擎 SpriteSet 不持引用计数（见字段注释），
+                //    不再各取一次引用的话，条目被水位淘汰后 Get 返回 null ⇒ 马里奥整段隐形
+                //    （本文件上面记的"旗杆下滑隐形"就是这么来的）。走引擎缓存取，不重复读盘。
+                var res = Game.Res;
+                if (res != null)
+                {
+                    foreach (var p in paths) res.LoadAsset<Sprite>(p, _ => { });
+                }
+                onDone?.Invoke();
+            });
         }
 
         public void Spawn(Vector2 worldPos, PowerState power = PowerState.Small)
@@ -296,61 +322,22 @@ namespace SuperMario.Module.Player
             if (_actor != null) UnityEngine.Object.Destroy(_actor.gameObject);
             _actor = null;
             _sprites.Clear();
+
+            // 把进关时钉住的引用还回去（见 _pinnedPaths 的说明）：不还就等于每过一关漏一批引用，
+            // 引擎缓存的引用计数只增不减、LRU 再也淘汰不掉它们。
+            var res = Game.Res;
+            if (res != null)
+            {
+                foreach (var p in _pinnedPaths) res.Release(p);
+            }
+            _pinnedPaths = Array.Empty<string>();
+
             _alive = true;
             _power = PowerState.Small;
         }
     }
 
-    /// <summary>
-    /// 精灵集合：一次性批量加载 + 按名字取。
-    /// <para>
-    /// 背景加载是**没有同步版本**的（<c>Game.Res.LoadAsset</c> 只有异步），
-    /// 所以想"随用随取"就必须预先攒齐 —— 这就是 do-not-create 前先 Preload 的原因。
-    /// </para>
-    /// </summary>
-    internal sealed class SpriteSet
-    {
-        private readonly System.Collections.Generic.Dictionary<string, Sprite> _map =
-            new System.Collections.Generic.Dictionary<string, Sprite>();
-        private int _pending;
-
-        /// <summary>已报过"缺失"的动作，避免每帧刷屏。</summary>
-        private readonly System.Collections.Generic.HashSet<string> _warned =
-            new System.Collections.Generic.HashSet<string>();
-
-        /// <summary>
-        /// 取一张已加载的精灵。
-        /// <para>
-        /// 取不到时**只报一次** error —— 这是补的课：原来静默返回 <c>null</c>，
-        /// 于是"忘了把某个动作放进 Preload 清单"的表现是<b>角色整段隐形</b>，
-        /// 且零报错零日志（旗杆下滑没有 Climb 帧就是这么隐形的）。
-        /// 报一次而不是每帧报，是因为它每帧都会被调用。
-        /// </para>
-        /// </summary>
-        public Sprite Get(string action)
-        {
-            if (_map.TryGetValue(action, out var s) && s != null) return s;
-            if (_warned.Add(action))
-                Game.Logger.Error("Player", $"精灵未加载：{action}（查 PlayerModule.Preload 清单）—— 这一帧会隐形");
-            return null;
-        }
-
-        public void Load(string[] actions, Action onDone)
-        {
-            _pending = actions.Length;
-            if (_pending == 0) { onDone?.Invoke(); return; }
-
-            foreach (var a in actions)
-            {
-                Game.Res.LoadAsset<Sprite>(ResPaths.Mario(a), sp =>
-                {
-                    if (sp != null) _map[a] = sp;
-                    else Game.Logger.Error("Player", $"精灵缺失：{ResPaths.Mario(a)}");
-                    if (--_pending <= 0) onDone?.Invoke();
-                });
-            }
-        }
-
-        public void Clear() => _map.Clear();
-    }
+    // （原实现 `internal sealed class SpriteSet` 已删除 —— 它整段下沉进了引擎
+    //   `clover-client-unity-engine/Runtime/Resource/SpriteSet.cs`，含"取不到只报一次"的语义；
+    //   本文件现在只用引擎那一份，⛔ 不许再在项目里起第二套。）
 }
